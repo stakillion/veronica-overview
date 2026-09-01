@@ -11,6 +11,7 @@ Rectangle {
     property alias searchField: searchInput
 
     signal searchCleared()
+    signal searchFieldFocused()
     signal accepted()
     signal moveSelectionDown()
     signal moveSelectionUp()
@@ -22,13 +23,24 @@ Rectangle {
 
     color: Qt.rgba(0.18, 0.18, 0.20, 0.88)
     border.width: searchInput.activeFocus ? 2 : 1
-    border.color: searchInput.activeFocus ? "#3584e4" : Qt.rgba(1, 1, 1, 0.22)
+    border.color: searchInput.activeFocus ? Kirigami.Theme.highlightColor : Qt.rgba(1, 1, 1, 0.22)
 
     Behavior on border.color { ColorAnimation { duration: 150 } }
+
+    focus: true
 
     function forceFocus() {
         searchInput.forceActiveFocus();
         searchInput.cursorPosition = searchInput.text.length;
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        cursorShape: Qt.IBeamCursor
+        z: -1
+        onClicked: {
+            root.forceFocus();
+        }
     }
 
     RowLayout {
@@ -41,7 +53,7 @@ Rectangle {
             source: "search"
             implicitWidth: 18
             implicitHeight: 18
-            color: searchInput.activeFocus ? "#3584e4" : Qt.rgba(1, 1, 1, 0.65)
+            color: searchInput.activeFocus ? Kirigami.Theme.highlightColor : Qt.rgba(1, 1, 1, 0.65)
             Behavior on color { ColorAnimation { duration: 150 } }
         }
 
@@ -53,9 +65,19 @@ Rectangle {
             font.pixelSize: Kirigami.Theme.defaultFont.pixelSize + 1
             clip: true
             selectByMouse: true
-            selectionColor: "#3584e4"
-            focus: true
+            selectionColor: Kirigami.Theme.highlightColor
+            focus: false
             activeFocusOnTab: true
+
+            onActiveFocusChanged: {
+                if (activeFocus) {
+                    root.searchFieldFocused();
+                }
+            }
+
+            onTextEdited: {
+                searchInput.forceActiveFocus(Qt.ShortcutFocusReason);
+            }
 
             QQC2.Label {
                 id: placeholderLabel
@@ -68,6 +90,10 @@ Rectangle {
             }
 
             Keys.onPressed: event => {
+                if (event.key === Qt.Key_PageUp || event.key === Qt.Key_PageDown) {
+                    event.accepted = false;
+                    return;
+                }
                 if (event.key === Qt.Key_Escape) {
                     root.escapePressed();
                     event.accepted = true;
@@ -109,7 +135,6 @@ Rectangle {
                 onClicked: {
                     searchInput.text = "";
                     root.searchCleared();
-                    root.forceFocus();
                 }
             }
         }

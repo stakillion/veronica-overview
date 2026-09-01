@@ -16,6 +16,7 @@ Item {
     property bool overviewOpen: false
     property int draggedTaskIndex: -1
     property int layoutRefreshTick: 0
+    property var lastActiveWinId: null
 
     signal taskActivated()
     signal taskClosed()
@@ -62,6 +63,98 @@ Item {
         filterNotMinimized: false
         groupMode: TaskManager.TasksModel.GroupDisabled
         sortMode: TaskManager.TasksModel.SortDisabled
+
+        onCountChanged: {
+            if (pageRoot.isCurrentPage) {
+                pageRoot.updateDefaultSelection();
+            }
+        }
+    }
+
+    property int selectedIndex: -1
+
+    onIsCurrentPageChanged: {
+        if (isCurrentPage) {
+            updateDefaultSelection();
+        }
+    }
+
+    onOverviewOpenChanged: {
+        if (overviewOpen && isCurrentPage) {
+            updateDefaultSelection();
+        }
+    }
+
+    onLastActiveWinIdChanged: {
+        if (isCurrentPage) {
+            updateDefaultSelection();
+        }
+    }
+
+    function updateDefaultSelection() {
+        if (pageTasksModel.count <= 0) {
+            selectedIndex = -1;
+            return;
+        }
+
+        // 1. Try to find the card matching lastActiveWinId
+        if (lastActiveWinId) {
+            for (let i = 0; i < pageTasksModel.count; i++) {
+                const mIdx = pageTasksModel.makeModelIndex(i);
+                const winIds = pageTasksModel.data(mIdx, TaskManager.AbstractTasksModel.WinIdList);
+                if (winIds && winIds.indexOf(lastActiveWinId) >= 0) {
+                    selectedIndex = i;
+                    return;
+                }
+            }
+        }
+
+        // 2. Default to the top-most window (index 0)
+        selectedIndex = 0;
+    }
+
+    function clearSelection() {
+        selectedIndex = -1;
+    }
+
+    function navigateSelection(dx, dy) {
+        if (windowCount <= 0) return "no_windows";
+        if (selectedIndex < 0) {
+            updateDefaultSelection();
+            return "selected";
+        }
+
+        if (dx !== 0) {
+            let target = selectedIndex + dx;
+            if (target >= 0 && target < windowCount) {
+                selectedIndex = target;
+                return "moved";
+            }
+        } else if (dy !== 0) {
+            const r = Math.floor(selectedIndex / cols);
+            const c = selectedIndex % cols;
+
+            if (dy < 0 && r === 0) {
+                return "above_top";
+            }
+
+            let newR = r + dy;
+            if (newR >= 0 && newR < rowCount) {
+                let target = (newR * cols) + c;
+                if (target >= windowCount) {
+                    target = windowCount - 1;
+                }
+                selectedIndex = target;
+                return "moved";
+            }
+        }
+        return "at_boundary";
+    }
+
+    function activateSelected() {
+        if (selectedIndex >= 0 && selectedIndex < windowCount) {
+            activateTask(selectedIndex);
+        }
     }
 
     readonly property int windowCount: pageTasksModel.count
@@ -273,7 +366,7 @@ Item {
                     windowTitle: cellItem.itemTitle
                     windowIcon: cellItem.itemIcon
                     appLabel: cellItem.itemAppName
-                    isActive: cellItem.itemIsActive
+                    isActive: cellItem.index === pageRoot.selectedIndex
                     winIds: cellItem.itemWinIds
                     windowGeometry: cellItem.itemGeom
 

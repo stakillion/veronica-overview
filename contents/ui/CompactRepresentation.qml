@@ -52,6 +52,8 @@ Item {
     Layout.fillWidth: vertical
     Layout.fillHeight: !vertical
 
+    activeFocusOnTab: false
+
     // Native KDE Plasma Panel Active Tab / Button Indicator
     KSvg.FrameSvgItem {
         id: expandedIndicator
@@ -192,6 +194,7 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.ArrowCursor
+        activeFocusOnTab: false
 
         onClicked: {
             root.plasmoidItem.toggleOverview();

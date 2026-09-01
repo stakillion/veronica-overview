@@ -15,6 +15,7 @@ Item {
     property bool filterOnlyCurrentDesktop: Plasmoid.configuration.filterOnlyCurrentDesktop !== undefined ? Plasmoid.configuration.filterOnlyCurrentDesktop : true
     property bool overviewOpen: false
     property int cardRadius: 14
+    property var lastActiveWinId: null
 
     property int layoutRefreshTick: 0
     property bool readyToAnimate: false
@@ -26,6 +27,43 @@ Item {
     signal windowDragMoved(real globalX, real globalY)
     signal windowDragEnded(real globalX, real globalY)
     signal windowDragCanceled()
+
+    function clearSelection() {
+        if (pageRepeater) {
+            const page = pageRepeater.itemAt(root.currentDesktopIndex);
+            if (page && page.clearSelection) {
+                page.clearSelection();
+            }
+        }
+    }
+
+    function updateDefaultSelection() {
+        if (pageRepeater) {
+            const page = pageRepeater.itemAt(root.currentDesktopIndex);
+            if (page && page.updateDefaultSelection) {
+                page.updateDefaultSelection();
+            }
+        }
+    }
+
+    function navigateSelection(dx, dy) {
+        if (pageRepeater) {
+            const page = pageRepeater.itemAt(root.currentDesktopIndex);
+            if (page && page.navigateSelection) {
+                return page.navigateSelection(dx, dy);
+            }
+        }
+        return "no_page";
+    }
+
+    function activateSelected() {
+        if (pageRepeater) {
+            const page = pageRepeater.itemAt(root.currentDesktopIndex);
+            if (page && page.activateSelected) {
+                page.activateSelected();
+            }
+        }
+    }
 
     function moveTaskToDesktop(pageIndex, taskRow, targetDesktopId) {
         if (pageRepeater) {
@@ -146,6 +184,7 @@ Item {
                 desktopId: pageDelegate.modelData
                 pageIndex: pageDelegate.index
                 isCurrentPage: pageDelegate.index === root.currentDesktopIndex
+                lastActiveWinId: root.lastActiveWinId
 
                 showCloseButtons: root.showCloseButtons
                 cardRadius: root.cardRadius

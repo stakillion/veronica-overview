@@ -14,6 +14,7 @@ FocusScope {
     id: root
 
     property bool isOverviewOpen: false
+    property var lastActiveWinId: null
 
     property bool showWorkspaceStrip: Plasmoid.configuration.showWorkspaceStrip !== false
     property int cardRadius: Plasmoid.configuration.cardBorderRadius !== undefined ? Plasmoid.configuration.cardBorderRadius : 14
@@ -22,36 +23,28 @@ FocusScope {
 
     focus: true
 
-    Component.onCompleted: {
-        Qt.callLater(openOverview);
-    }
-
-    onVisibleChanged: {
-        if (visible) {
-            Qt.callLater(openOverview);
+    onIsOverviewOpenChanged: {
+        if (isOverviewOpen) {
+            openOverview();
         } else {
-            searchBar.text = "";
-        }
-    }
-
-    function clearSearch() {
-        if (searchBar) {
-            searchBar.text = "";
+            if (searchBar) searchBar.text = "";
         }
     }
 
     function openOverview() {
-        clearSearch();
         if (searchBar) {
-            searchBar.forceFocus();
+            searchBar.text = "";
+            searchBar.searchField.focus = false;
         }
+        root.forceActiveFocus();
         if (windowGrid) {
             windowGrid.resetTracking();
+            windowGrid.updateDefaultSelection();
         }
     }
 
     function dismissOverview() {
-        clearSearch();
+        if (searchBar) searchBar.text = "";
         root.requestClose();
     }
 
@@ -69,7 +62,7 @@ FocusScope {
         onTriggered: root.scrollCooldown = false
     }
 
-    function handleScroll(deltaY) {
+    function switchToPreviousDesktop() {
         if (searchResults && searchResults.visible) return;
         if (root.scrollCooldown) return;
 
@@ -84,27 +77,50 @@ FocusScope {
                 break;
             }
         }
-        if (currentIndex < 0) return;
+        if (currentIndex > 0) {
+            const targetIdx = currentIndex - 1;
+            root.scrollCooldown = true;
+            scrollCooldownTimer.restart();
+            root.switchToDesktop(ids[targetIdx], targetIdx);
+        }
+    }
+
+    function switchToNextDesktop() {
+        if (searchResults && searchResults.visible) return;
+        if (root.scrollCooldown) return;
+
+        const ids = desktopInfo.desktopIds;
+        if (!ids || ids.length <= 1) return;
+
+        const currentId = desktopInfo.currentDesktop;
+        let currentIndex = -1;
+        for (let i = 0; i < ids.length; i++) {
+            if (ids[i] === currentId) {
+                currentIndex = i;
+                break;
+            }
+        }
+        if (currentIndex >= 0 && currentIndex < ids.length - 1) {
+            const targetIdx = currentIndex + 1;
+            root.scrollCooldown = true;
+            scrollCooldownTimer.restart();
+            root.switchToDesktop(ids[targetIdx], targetIdx);
+        }
+    }
+
+    function handleScroll(deltaY) {
+        if (searchResults && searchResults.visible) return;
+        if (root.scrollCooldown) return;
 
         root.accumulatedDelta += deltaY;
         const threshold = 80;
 
         if (root.accumulatedDelta >= threshold) {
             root.accumulatedDelta = 0;
-            if (currentIndex > 0) {
-                const targetIdx = currentIndex - 1;
-                root.scrollCooldown = true;
-                scrollCooldownTimer.restart();
-                root.switchToDesktop(ids[targetIdx], targetIdx);
-            }
+            root.switchToPreviousDesktop();
         } else if (root.accumulatedDelta <= -threshold) {
             root.accumulatedDelta = 0;
-            if (currentIndex < ids.length - 1) {
-                const targetIdx = currentIndex + 1;
-                root.scrollCooldown = true;
-                scrollCooldownTimer.restart();
-                root.switchToDesktop(ids[targetIdx], targetIdx);
-            }
+            root.switchToNextDesktop();
         }
     }
 
@@ -186,14 +202,23 @@ FocusScope {
             id: searchBar
             Layout.alignment: Qt.AlignHCenter
 
+            onSearchFieldFocused: {
+                windowGrid.clearSelection();
+            }
             onAccepted: {
                 if (searchResults.visible) {
                     searchResults.activateCurrent();
                 }
             }
             onMoveSelectionDown: {
-                if (searchResults.visible) {
-                    searchResults.selectNext();
+                if (searchBar.text.length > 0) {
+                    if (searchResults.visible) {
+                        searchResults.selectNext();
+                    }
+                } else {
+                    searchBar.searchField.focus = false;
+                    root.forceActiveFocus();
+                    windowGrid.updateDefaultSelection();
                 }
             }
             onMoveSelectionUp: {
@@ -204,7 +229,9 @@ FocusScope {
             onEscapePressed: {
                 if (searchBar.text.length > 0) {
                     searchBar.text = "";
-                    searchBar.forceFocus();
+                    searchBar.searchField.focus = false;
+                    root.forceActiveFocus();
+                    windowGrid.updateDefaultSelection();
                 } else {
                     root.dismissOverview();
                 }
@@ -216,6 +243,7 @@ FocusScope {
     WindowGrid {
         id: windowGrid
         overviewOpen: root.isOverviewOpen
+        lastActiveWinId: root.lastActiveWinId
         anchors.top: topHeader.bottom
         anchors.bottom: parent.bottom
         anchors.left: parent.left
@@ -303,41 +331,79 @@ FocusScope {
         }
     }
 
-    // Capture global keystrokes at ANY point so typing immediately searches
-    Keys.forwardTo: [searchBar.searchField]
-
     Keys.onPressed: event => {
-        if (event.key === Qt.Key_Escape) {
-            if (searchBar.text.length > 0) {
+        if (event.key === Qt.Key_PageUp) {
+            root.switchToPreviousDesktop();
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_PageDown) {
+            root.switchToNextDesktop();
+            event.accepted = true;
+            return;
+        }
+
+        if (searchBar.searchField.activeFocus) {
+            if (event.key === Qt.Key_Escape) {
                 searchBar.text = "";
-                searchBar.forceFocus();
-            } else {
-                root.dismissOverview();
+                searchBar.searchField.focus = false;
+                root.forceActiveFocus();
+                windowGrid.updateDefaultSelection();
+                event.accepted = true;
             }
+            return;
+        }
+
+        // --- Window Card Mode ---
+        if (event.key === Qt.Key_Escape) {
+            root.dismissOverview();
+            event.accepted = true;
+            return;
+        }
+
+        if (event.key === Qt.Key_Left) {
+            windowGrid.navigateSelection(-1, 0);
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_Right) {
+            windowGrid.navigateSelection(1, 0);
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_Up) {
+            const res = windowGrid.navigateSelection(0, -1);
+            if (res === "above_top") {
+                windowGrid.clearSelection();
+                searchBar.forceFocus();
+            }
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_Down) {
+            windowGrid.navigateSelection(0, 1);
+            event.accepted = true;
+            return;
+        }
+
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+            windowGrid.activateSelected();
             event.accepted = true;
             return;
         }
 
         if (event.key === Qt.Key_Backspace) {
-            if (!searchBar.searchField.activeFocus) {
-                searchBar.forceFocus();
-                if (searchBar.text.length > 0) {
-                    searchBar.text = searchBar.text.slice(0, -1);
-                    searchBar.searchField.cursorPosition = searchBar.text.length;
-                }
-                event.accepted = true;
-            }
+            event.accepted = true;
             return;
         }
 
-        // Printable text typed anywhere immediately routes to search box
+        // Printable text typed anywhere routes to search box and selects it
         if (event.text && event.text.length > 0 && event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) {
-            if (!searchBar.searchField.activeFocus) {
-                searchBar.forceFocus();
-                searchBar.text += event.text;
-                searchBar.searchField.cursorPosition = searchBar.text.length;
-                event.accepted = true;
-            }
+            windowGrid.clearSelection();
+            searchBar.forceFocus();
+            searchBar.text += event.text;
+            event.accepted = true;
+            return;
         }
     }
 

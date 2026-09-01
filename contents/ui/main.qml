@@ -28,12 +28,14 @@ PlasmoidItem {
     Plasmoid.status: root.isOverviewOpen ? PlasmaCore.Types.AcceptingInputStatus : PlasmaCore.Types.ActiveStatus
     Plasmoid.backgroundHints: PlasmaCore.Types.DefaultBackground
     Plasmoid.userBackgroundHints: PlasmaCore.Types.DefaultBackground
+    expanded: root.isOverviewOpen
 
     activationTogglesExpanded: false
     hideOnWindowDeactivate: false
 
     property bool isOverviewOpen: false
     property bool focusTrackingArmed: false
+    property var lastActiveWinId: null
 
     Timer {
         id: armFocusTrackingTimer
@@ -56,6 +58,13 @@ PlasmoidItem {
         sortMode: TaskManager.TasksModel.SortDisabled
 
         onActiveTaskChanged: {
+            if (!root.isOverviewOpen && activeTask && activeTask.valid) {
+                const winIds = globalFocusMonitor.data(activeTask, TaskManager.AbstractTasksModel.WinIdList);
+                if (winIds && winIds.length > 0) {
+                    root.lastActiveWinId = winIds[0];
+                }
+            }
+
             if (root.isOverviewOpen && root.focusTrackingArmed && activeTask && activeTask.valid) {
                 // If the task is minimized, ignore it
                 if (globalFocusMonitor.data(activeTask, TaskManager.AbstractTasksModel.IsMinimized) === true) {
@@ -92,14 +101,26 @@ PlasmoidItem {
     }
 
     function openOverview() {
-        if (overviewOverlay) {
-            overviewOverlay.clearSearch();
+        if (globalFocusMonitor.activeTask && globalFocusMonitor.activeTask.valid) {
+            const winIds = globalFocusMonitor.data(globalFocusMonitor.activeTask, TaskManager.AbstractTasksModel.WinIdList);
+            if (winIds && winIds.length > 0) {
+                root.lastActiveWinId = winIds[0];
+            }
         }
+
         root.focusTrackingArmed = false;
         armFocusTrackingTimer.restart();
         isOverviewOpen = true;
         overviewOverlay.opacity = 0;
         overviewDialog.visible = true;
+
+        Qt.callLater(() => {
+            overviewDialog.requestActivate();
+            if (overviewOverlay) {
+                overviewOverlay.forceActiveFocus();
+                overviewOverlay.openOverview();
+            }
+        });
 
         fadeInAnim.restart();
 
@@ -115,9 +136,6 @@ PlasmoidItem {
 
     function closeOverview() {
         isOverviewOpen = false;
-        if (overviewOverlay) {
-            overviewOverlay.clearSearch();
-        }
 
         fadeInAnim.stop();
         fadeOutAnim.restart();
@@ -181,12 +199,25 @@ PlasmoidItem {
         id: overviewDialog
 
         title: "Veronica Overview"
-        type: PlasmaCore.Dialog.FullScreen
+        type: PlasmaCore.Dialog.Normal
         location: PlasmaCore.Types.Floating
+        visualParent: compactView
         backgroundHints: PlasmaCore.Dialog.StandardBackground
         flags: Qt.FramelessWindowHint | Qt.Window | Qt.CustomizeWindowHint
         hideOnWindowDeactivate: false
         visible: false
+
+        onVisibleChanged: {
+            if (visible) {
+                Qt.callLater(() => {
+                    overviewDialog.requestActivate();
+                    if (overviewOverlay) {
+                        overviewOverlay.forceActiveFocus();
+                        overviewOverlay.openOverview();
+                    }
+                });
+            }
+        }
 
         readonly property int lockedWidth: Math.round(Screen.width > 0 ? Screen.width : 1920)
         readonly property int lockedHeight: Math.round(Screen.height > 0 ? Screen.height : 1080)
@@ -200,11 +231,12 @@ PlasmoidItem {
         minimumHeight: lockedHeight
         maximumHeight: lockedHeight
 
-        OverviewOverlay {
+        mainItem: OverviewOverlay {
             id: overviewOverlay
             width: overviewDialog.lockedWidth
             height: overviewDialog.lockedHeight
             isOverviewOpen: root.isOverviewOpen
+            lastActiveWinId: root.lastActiveWinId
             opacity: 0
 
             onRequestClose: {

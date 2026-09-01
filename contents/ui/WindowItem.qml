@@ -97,7 +97,7 @@ Rectangle {
 
     color: isActive ? Qt.rgba(0.24, 0.24, 0.28, 0.95) : (isHovered ? Qt.rgba(0.20, 0.20, 0.23, 0.92) : Qt.rgba(0.14, 0.14, 0.16, 0.88))
     border.width: isActive ? 2 : 0
-    border.color: isActive ? "#3584e4" : "transparent"
+    border.color: isActive ? Kirigami.Theme.highlightColor : "transparent"
 
     scale: isHovered ? 1.025 : 1.0
     Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
