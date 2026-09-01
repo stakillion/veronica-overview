@@ -1,0 +1,28 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "stakillion",
+                "Email": "stakillion@gmail.com"
+            }
+        ],
+        "Category": "Application Launchers",
+        "Description": "GNOME-style Overview for KDE Plasma desktop with visible and interactive panels",
+        "EnabledByDefault": true,
+        "Icon": "search",
+        "Id": "stakillion.veronica.overview",
+        "License": "GPL-3.0+",
+        "Name": "Veronica Overview",
+        "ServiceTypes": [
+            "Plasma/Applet"
+        ],
+        "Version": "1.0.0",
+        "Website": "https://n3.pm"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-MainScript": "ui/main.qml",
+    "X-Plasma-Provides": [
+        "org.kde.plasma.launchermenu"
+    ]
+}

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name=""/>
+
+  <group name="General">
+    <entry name="buttonText" type="String">
+      <default>Activities</default>
+    </entry>
+    <entry name="buttonFontFamily" type="String">
+      <default></default>
+    </entry>
+    <entry name="buttonFontSize" type="Int">
+      <default>0</default>
+    </entry>
+    <entry name="buttonFontBold" type="Bool">
+      <default>false</default>
+    </entry>
+    <entry name="buttonFontItalic" type="Bool">
+      <default>false</default>
+    </entry>
+    <entry name="buttonFontWeight" type="Int">
+      <default>400</default>
+    </entry>
+    <entry name="buttonFontStyleName" type="String">
+      <default></default>
+    </entry>
+    <entry name="showButtonIcon" type="Bool">
+      <default>true</default>
+    </entry>
+    <entry name="showButtonText" type="Bool">
+      <default>false</default>
+    </entry>
+    <entry name="icon" type="String">
+      <default>search</default>
+    </entry>
+    <entry name="buttonIconName" type="String">
+      <default>search</default>
+    </entry>
+    <entry name="showWorkspaceStrip" type="Bool">
+      <default>true</default>
+    </entry>
+    <entry name="filterOnlyCurrentDesktop" type="Bool">
+      <default>true</default>
+    </entry>
+    <entry name="showCloseButtons" type="Bool">
+      <default>true</default>
+    </entry>
+    <entry name="hasBottomPanel" type="Bool">
+      <default>true</default>
+    </entry>
+  </group>
+</kcfg>
