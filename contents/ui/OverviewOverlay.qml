@@ -20,6 +20,8 @@ FocusScope {
     property int cardRadius: Plasmoid.configuration.cardBorderRadius !== undefined ? Plasmoid.configuration.cardBorderRadius : 14
 
     signal requestClose()
+    signal requestDesktopSwitch(var desktopId)
+    signal requestTaskMoved(var targetDesktopId)
 
     focus: true
 
@@ -125,6 +127,8 @@ FocusScope {
     }
 
     function switchToDesktop(desktopId, index) {
+        root.requestDesktopSwitch(desktopId);
+
         DBus.SessionBus.asyncCall({
             service: "org.kde.KWin",
             path: "/VirtualDesktopManager",
@@ -194,6 +198,7 @@ FocusScope {
             visible: root.showWorkspaceStrip
             Layout.fillWidth: true
 
+            onDesktopSelected: desktopId => root.requestDesktopSwitch(desktopId)
             onCurrentDesktopClicked: root.dismissOverview()
         }
 
@@ -299,6 +304,7 @@ FocusScope {
             workspaceStrip.highlightedDesktopId = "";
 
             if (target && target.desktopId !== undefined) {
+                root.requestTaskMoved(target.desktopId);
                 windowGrid.moveTaskToDesktop(dragOverlay.sourcePageIndex, dragOverlay.sourceTaskRow, target.desktopId);
                 dragOverlay.isDragging = false;
                 dragOverlay.opacity = 0;

@@ -34,16 +34,33 @@ PlasmoidItem {
     hideOnWindowDeactivate: false
 
     property bool isOverviewOpen: false
-    property bool focusTrackingArmed: false
+    property bool ignoreWindowMoveActivation: false
     property var lastActiveWinId: null
+    property var lastSwitchedDesktop: null
+    property var lastSeenDesktop: desktopInfoMonitor.currentDesktop
 
-    Timer {
-        id: armFocusTrackingTimer
-        interval: 350
-        repeat: false
-        onTriggered: {
-            root.focusTrackingArmed = true;
+    TaskManager.VirtualDesktopInfo {
+        id: desktopInfoMonitor
+        onCurrentDesktopChanged: {
+            root.lastSeenDesktop = String(currentDesktop);
+            if (root.isOverviewOpen) {
+                overviewDialog.requestActivate();
+                if (overviewOverlay) {
+                    overviewOverlay.forceActiveFocus();
+                }
+            }
+            if (root.lastSwitchedDesktop && String(root.lastSwitchedDesktop) === String(root.lastSeenDesktop)) {
+                Qt.callLater(() => {
+                    if (root.lastSwitchedDesktop && String(root.lastSwitchedDesktop) === String(root.lastSeenDesktop)) {
+                        root.lastSwitchedDesktop = null;
+                    }
+                });
+            }
         }
+    }
+
+    function recordDesktopSwitch(desktopId) {
+        root.lastSwitchedDesktop = String(desktopId);
     }
 
     TaskManager.TasksModel {
@@ -65,7 +82,15 @@ PlasmoidItem {
                 }
             }
 
-            if (root.isOverviewOpen && root.focusTrackingArmed && activeTask && activeTask.valid) {
+            if (root.isOverviewOpen && activeTask && activeTask.valid) {
+                if (root.ignoreWindowMoveActivation) {
+                    root.ignoreWindowMoveActivation = false;
+                    return;
+                }
+                // If a virtual desktop switch was initiated inside the overview, ignore active task changes during the switch
+                if (root.lastSwitchedDesktop !== null) {
+                    return;
+                }
                 // If the task is minimized, ignore it
                 if (globalFocusMonitor.data(activeTask, TaskManager.AbstractTasksModel.IsMinimized) === true) {
                     return;
@@ -101,6 +126,8 @@ PlasmoidItem {
     }
 
     function openOverview() {
+        root.ignoreWindowMoveActivation = false;
+        root.lastSwitchedDesktop = null;
         if (globalFocusMonitor.activeTask && globalFocusMonitor.activeTask.valid) {
             const winIds = globalFocusMonitor.data(globalFocusMonitor.activeTask, TaskManager.AbstractTasksModel.WinIdList);
             if (winIds && winIds.length > 0) {
@@ -108,8 +135,6 @@ PlasmoidItem {
             }
         }
 
-        root.focusTrackingArmed = false;
-        armFocusTrackingTimer.restart();
         isOverviewOpen = true;
         overviewOverlay.opacity = 0;
         overviewDialog.visible = true;
@@ -239,6 +264,10 @@ PlasmoidItem {
             lastActiveWinId: root.lastActiveWinId
             opacity: 0
 
+            onRequestDesktopSwitch: desktopId => root.recordDesktopSwitch(desktopId)
+            onRequestTaskMoved: targetDesktopId => {
+                root.ignoreWindowMoveActivation = true;
+            }
             onRequestClose: {
                 root.closeOverview();
             }

@@ -62,7 +62,7 @@ Item {
         filterMinimized: false
         filterNotMinimized: false
         groupMode: TaskManager.TasksModel.GroupDisabled
-        sortMode: TaskManager.TasksModel.SortDisabled
+        sortMode: TaskManager.TasksModel.SortLastActivated
 
         onCountChanged: {
             if (pageRoot.isCurrentPage) {
@@ -72,30 +72,6 @@ Item {
     }
 
     property int selectedIndex: -1
-
-    readonly property int topModelIndex: {
-        const _tick = pageRoot.layoutRefreshTick;
-        if (pageTasksModel.count <= 0) return 0;
-
-        if (lastActiveWinId) {
-            for (let i = 0; i < pageTasksModel.count; i++) {
-                const mIdx = pageTasksModel.makeModelIndex(i);
-                const winIds = pageTasksModel.data(mIdx, TaskManager.AbstractTasksModel.WinIdList);
-                if (winIds && winIds.indexOf(lastActiveWinId) >= 0) {
-                    return i;
-                }
-            }
-        }
-
-        for (let j = 0; j < pageTasksModel.count; j++) {
-            const mIdx = pageTasksModel.makeModelIndex(j);
-            if (pageTasksModel.data(mIdx, TaskManager.AbstractTasksModel.IsActive) === true) {
-                return j;
-            }
-        }
-
-        return 0;
-    }
 
     onIsCurrentPageChanged: {
         if (isCurrentPage) {
@@ -163,15 +139,6 @@ Item {
 
     function activateSelected() {
         if (selectedIndex >= 0 && selectedIndex < windowCount) {
-            if (cardsRepeater) {
-                for (let i = 0; i < cardsRepeater.count; i++) {
-                    const it = cardsRepeater.itemAt(i);
-                    if (it && it.displayIndex === selectedIndex) {
-                        activateTask(it.index);
-                        return;
-                    }
-                }
-            }
             activateTask(selectedIndex);
         }
     }
@@ -268,21 +235,16 @@ Item {
         }
     }
 
-    function getCardWidthAtDisplayIndex(dIdx) {
-        if (cardsRepeater) {
-            for (let i = 0; i < cardsRepeater.count; i++) {
-                const it = cardsRepeater.itemAt(i);
-                if (it && it.displayIndex === dIdx && it.cardW > 0) {
-                    return it.cardW;
-                }
-            }
+    function getCardWidthAtIndex(i) {
+        if (cardsRepeater && i >= 0 && i < cardsRepeater.count) {
+            const it = cardsRepeater.itemAt(i);
+            if (it && it.cardW > 0) return it.cardW;
         }
         return pageRoot.slotWidth;
     }
 
     function getRowMetrics(rIndex) {
         const _tick = pageRoot.layoutRefreshTick;
-        const _top = pageRoot.topModelIndex;
         const startIdx = rIndex * pageRoot.cols;
         const endIdx = Math.min(pageRoot.windowCount, (rIndex + 1) * pageRoot.cols);
         const count = Math.max(0, endIdx - startIdx);
@@ -291,7 +253,7 @@ Item {
         const widths = [];
         let sumW = 0;
         for (let i = startIdx; i < endIdx; i++) {
-            const w = pageRoot.getCardWidthAtDisplayIndex(i);
+            const w = pageRoot.getCardWidthAtIndex(i);
             widths.push(w);
             sumW += w;
         }
@@ -371,15 +333,8 @@ Item {
                     }
                 }
 
-                readonly property int displayIndex: {
-                    const topIdx = pageRoot.topModelIndex;
-                    if (cellItem.index === topIdx) return 0;
-                    if (cellItem.index < topIdx) return cellItem.index + 1;
-                    return cellItem.index;
-                }
-
-                readonly property int rowIndex: Math.floor(displayIndex / pageRoot.cols)
-                readonly property int colIndex: displayIndex % pageRoot.cols
+                readonly property int rowIndex: Math.floor(cellItem.index / pageRoot.cols)
+                readonly property int colIndex: cellItem.index % pageRoot.cols
                 readonly property var rowMetrics: pageRoot.getRowMetrics(rowIndex)
 
                 x: (rowMetrics && Array.isArray(rowMetrics.offsets) && colIndex < rowMetrics.offsets.length && rowMetrics.offsets[colIndex] !== undefined) ? rowMetrics.offsets[colIndex] : Math.max(16, (pageRoot.width - cardW) / 2)
@@ -397,7 +352,7 @@ Item {
                     windowTitle: cellItem.itemTitle
                     windowIcon: cellItem.itemIcon
                     appLabel: cellItem.itemAppName
-                    isActive: cellItem.displayIndex === pageRoot.selectedIndex
+                    isActive: cellItem.index === pageRoot.selectedIndex
                     winIds: cellItem.itemWinIds
                     windowGeometry: cellItem.itemGeom
 
