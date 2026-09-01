@@ -33,6 +33,7 @@ PlasmoidItem {
     hideOnWindowDeactivate: false
 
     property bool isOverviewOpen: false
+    property bool focusTrackingArmed: false
 
     Timer {
         id: armFocusTrackingTimer
@@ -49,21 +50,21 @@ PlasmoidItem {
         filterByActivity: false
         filterByScreen: false
         filterHidden: false
-        filterMinimized: true
+        filterMinimized: false
         filterNotMinimized: false
         groupMode: TaskManager.TasksModel.GroupDisabled
         sortMode: TaskManager.TasksModel.SortDisabled
 
         onActiveTaskChanged: {
-            if (root.isOverviewOpen && !root.isSwitchingDesktop && root.focusTrackingArmed && activeTask && activeTask.valid) {
+            if (root.isOverviewOpen && root.focusTrackingArmed && activeTask && activeTask.valid) {
                 // If the task is minimized, ignore it
-                if (globalFocusMonitor.data(activeTask, 279) === true) {
+                if (globalFocusMonitor.data(activeTask, TaskManager.AbstractTasksModel.IsMinimized) === true) {
                     return;
                 }
 
-                const display = String(globalFocusMonitor.data(activeTask, 0) || "").toLowerCase();
-                const appId = String(globalFocusMonitor.data(activeTask, 257) || "").toLowerCase();
-                const appName = String(globalFocusMonitor.data(activeTask, 258) || "").toLowerCase();
+                const display = String(globalFocusMonitor.data(activeTask, TaskManager.AbstractTasksModel.DisplayRole) || "").toLowerCase();
+                const appId = String(globalFocusMonitor.data(activeTask, TaskManager.AbstractTasksModel.AppId) || "").toLowerCase();
+                const appName = String(globalFocusMonitor.data(activeTask, TaskManager.AbstractTasksModel.AppName) || "").toLowerCase();
 
                 // Exclude Yakuake, plasma applets, and background bridges
                 if (display.includes("yakuake") || appId.includes("yakuake") || appName.includes("yakuake")) {
@@ -91,33 +92,43 @@ PlasmoidItem {
     }
 
     function openOverview() {
+        if (overviewOverlay) {
+            overviewOverlay.clearSearch();
+        }
+        root.focusTrackingArmed = false;
+        armFocusTrackingTimer.restart();
         isOverviewOpen = true;
+        overviewOverlay.opacity = 0;
         overviewDialog.visible = true;
-        overviewOverlay.opacity = 1;
 
-        // Save original hiding mode and set dodge-windows panels to 'none' (Always Visible) while overview is open
+        fadeInAnim.restart();
+
+        // Save original hiding mode ONLY if not already in temporary state, then set dodge-windows panels to 'windowsgobelow'
         DBus.SessionBus.asyncCall({
             service: "org.kde.plasmashell",
             path: "/PlasmaShell",
             iface: "org.kde.PlasmaShell",
             member: "evaluateScript",
-            arguments: ["var pans = panels(); for (var i = 0; i < pans.length; i++) { pans[i].currentConfigGroup = ['General']; pans[i].writeConfig('OriginalHiding', pans[i].hiding); if (pans[i].hiding === 'dodgewindows') { pans[i].hiding = 'windowsgobelow'; } }"]
+            arguments: ["var pans = panels(); for (var i = 0; i < pans.length; i++) { pans[i].currentConfigGroup = ['General']; if (pans[i].hiding === 'dodgewindows') { pans[i].writeConfig('OriginalHiding', 'dodgewindows'); pans[i].hiding = 'windowsgobelow'; } }"]
         });
     }
 
     function closeOverview() {
         isOverviewOpen = false;
+        if (overviewOverlay) {
+            overviewOverlay.clearSearch();
+        }
 
-        fadeAnim.to = 0;
-        fadeAnim.start();
+        fadeInAnim.stop();
+        fadeOutAnim.restart();
 
-        // Restore panels back to their original hiding mode
+        // Restore panels back to their original hiding mode and clear temporary config key
         DBus.SessionBus.asyncCall({
             service: "org.kde.plasmashell",
             path: "/PlasmaShell",
             iface: "org.kde.PlasmaShell",
             member: "evaluateScript",
-            arguments: ["var pans = panels(); for (var i = 0; i < pans.length; i++) { pans[i].currentConfigGroup = ['General']; var orig = pans[i].readConfig('OriginalHiding'); if (orig && orig !== '') { pans[i].hiding = orig; } }"]
+            arguments: ["var pans = panels(); for (var i = 0; i < pans.length; i++) { pans[i].currentConfigGroup = ['General']; var orig = pans[i].readConfig('OriginalHiding'); if (orig && orig === 'dodgewindows') { pans[i].hiding = 'dodgewindows'; pans[i].writeConfig('OriginalHiding', ''); } }"]
         });
     }
 
@@ -125,14 +136,26 @@ PlasmoidItem {
         root.toggleOverview();
     }
 
-    PropertyAnimation {
-        id: fadeAnim
+    NumberAnimation {
+        id: fadeInAnim
         target: overviewOverlay
         property: "opacity"
+        from: overviewOverlay.opacity
+        to: 1
         duration: Kirigami.Units.shortDuration
-        easing.type: Easing.InOutQuad
+        easing.type: Easing.OutCubic
+    }
+
+    NumberAnimation {
+        id: fadeOutAnim
+        target: overviewOverlay
+        property: "opacity"
+        from: overviewOverlay.opacity
+        to: 0
+        duration: Kirigami.Units.shortDuration
+        easing.type: Easing.InCubic
         onFinished: {
-            if (overviewOverlay.opacity === 0) {
+            if (!root.isOverviewOpen) {
                 overviewDialog.visible = false;
             }
         }
@@ -158,10 +181,10 @@ PlasmoidItem {
         id: overviewDialog
 
         title: "Veronica Overview"
-        type: PlasmaCore.Dialog.Normal
+        type: PlasmaCore.Dialog.FullScreen
         location: PlasmaCore.Types.Floating
         backgroundHints: PlasmaCore.Dialog.StandardBackground
-        flags: Qt.FramelessWindowHint | Qt.Window | Qt.CustomizeWindowHint | Qt.MSWindowsFixedSizeDialogHint
+        flags: Qt.FramelessWindowHint | Qt.Window | Qt.CustomizeWindowHint
         hideOnWindowDeactivate: false
         visible: false
 

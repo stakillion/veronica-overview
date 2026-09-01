@@ -34,16 +34,24 @@ FocusScope {
         }
     }
 
+    function clearSearch() {
+        if (searchBar) {
+            searchBar.text = "";
+        }
+    }
+
     function openOverview() {
-        searchBar.text = "";
-        searchBar.forceFocus();
+        clearSearch();
+        if (searchBar) {
+            searchBar.forceFocus();
+        }
         if (windowGrid) {
             windowGrid.resetTracking();
         }
     }
 
     function dismissOverview() {
-        searchBar.text = "";
+        clearSearch();
         root.requestClose();
     }
 

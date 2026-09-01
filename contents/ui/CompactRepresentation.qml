@@ -191,7 +191,7 @@ Item {
 
         anchors.fill: parent
         hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
+        cursorShape: Qt.ArrowCursor
 
         onClicked: {
             root.plasmoidItem.toggleOverview();
