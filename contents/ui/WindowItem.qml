@@ -20,6 +20,25 @@ Rectangle {
     property int itemIndex: 0
     property bool overviewOpen: false
     property bool isMinimized: false
+    property bool isMaximized: false
+    property bool isKeepAbove: false
+    property bool isKeepBelow: false
+    property bool isFullScreen: false
+    property bool isShaded: false
+    property bool isOnAllDesktops: false
+    property bool canLaunchNewInstance: false
+    property bool isClosable: true
+    property bool isMovable: false
+    property bool isResizable: false
+    property bool isMaximizable: true
+    property bool isMinimizable: true
+    property bool isFullScreenable: true
+    property bool isShadeable: false
+    property bool hasNoBorder: false
+    property bool canSetNoBorder: false
+    property bool isExcludedFromCapture: false
+    property var virtualDesktops: []
+    property var activities: []
 
     property bool showTitle: true
     property bool showCloseButton: true
@@ -27,12 +46,40 @@ Rectangle {
     property bool isBeingDragged: false
 
     signal activated()
+    signal selected()
     signal closed()
     signal aspectDiscovered(real aspect)
     signal dragStarted(real itemGlobalX, real itemGlobalY, real grabX, real grabY)
     signal dragMoved(real globalX, real globalY)
     signal dragEnded(real globalX, real globalY)
     signal dragCanceled()
+
+    signal requestNewInstance()
+    signal requestMove()
+    signal requestResize()
+    signal requestToggleMinimized()
+    signal requestToggleMaximized()
+    signal requestToggleKeepAbove()
+    signal requestToggleKeepBelow()
+    signal requestToggleFullScreen()
+    signal requestToggleShaded()
+    signal requestToggleNoBorder()
+    signal requestToggleExcludeFromCapture()
+    signal requestVirtualDesktops(var desktops)
+    signal requestNewVirtualDesktop()
+    signal requestActivities(var activities)
+
+    onOverviewOpenChanged: {
+        if (!overviewOpen) {
+            cardContextMenu.closeMenu();
+        }
+    }
+
+    onIsActiveChanged: {
+        if (!isActive) {
+            cardContextMenu.closeMenu();
+        }
+    }
 
     // Card title displays the specific window title, falling back to application title
     readonly property string cardTitle: {
@@ -213,20 +260,27 @@ Rectangle {
         z: 50
         hoverEnabled: true
         cursorShape: dragInitiated ? Qt.ClosedHandCursor : (containsMouse ? Qt.PointingHandCursor : Qt.ArrowCursor)
-        acceptedButtons: Qt.LeftButton
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
 
         property real pressX: 0
         property real pressY: 0
         property bool dragInitiated: false
 
         onPressed: mouse => {
-            pressX = mouse.x;
-            pressY = mouse.y;
-            dragInitiated = false;
+            if (mouse.button === Qt.RightButton) {
+                root.selected();
+                cardContextMenu.popup(mouseArea, mouse.x, mouse.y);
+                return;
+            }
+            if (mouse.button === Qt.LeftButton) {
+                pressX = mouse.x;
+                pressY = mouse.y;
+                dragInitiated = false;
+            }
         }
 
         onPositionChanged: mouse => {
-            if (pressed && !dragInitiated) {
+            if ((pressedButtons & Qt.LeftButton) && !dragInitiated) {
                 const dx = mouse.x - pressX;
                 const dy = mouse.y - pressY;
                 if (Math.sqrt(dx * dx + dy * dy) > 8) {
@@ -242,6 +296,7 @@ Rectangle {
         }
 
         onReleased: mouse => {
+            if (mouse.button === Qt.RightButton) return;
             if (dragInitiated) {
                 dragInitiated = false;
                 const globalPos = root.mapToItem(null, mouse.x, mouse.y);
@@ -260,6 +315,47 @@ Rectangle {
         onWheel: wheel => {
             wheel.accepted = false;
         }
+    }
+
+    TaskContextMenu {
+        id: cardContextMenu
+
+        canLaunchNewInstance: root.canLaunchNewInstance
+        isOnAllDesktops: root.isOnAllDesktops
+        virtualDesktops: root.virtualDesktops
+        activities: root.activities
+        isMovable: root.isMovable
+        isResizable: root.isResizable
+        isMaximizable: root.isMaximizable
+        isMaximized: root.isMaximized
+        isMinimizable: root.isMinimizable
+        isMinimized: root.isMinimized
+        isKeepAbove: root.isKeepAbove
+        isKeepBelow: root.isKeepBelow
+        isFullScreenable: root.isFullScreenable
+        isFullScreen: root.isFullScreen
+        isShadeable: root.isShadeable
+        isShaded: root.isShaded
+        canSetNoBorder: root.canSetNoBorder
+        hasNoBorder: root.hasNoBorder
+        isExcludedFromCapture: root.isExcludedFromCapture
+        isClosable: root.isClosable
+
+        onRequestNewInstance: root.requestNewInstance()
+        onRequestMove: root.requestMove()
+        onRequestResize: root.requestResize()
+        onRequestToggleMaximized: root.requestToggleMaximized()
+        onRequestToggleMinimized: root.requestToggleMinimized()
+        onRequestToggleKeepAbove: root.requestToggleKeepAbove()
+        onRequestToggleKeepBelow: root.requestToggleKeepBelow()
+        onRequestToggleFullScreen: root.requestToggleFullScreen()
+        onRequestToggleShaded: root.requestToggleShaded()
+        onRequestToggleNoBorder: root.requestToggleNoBorder()
+        onRequestToggleExcludeFromCapture: root.requestToggleExcludeFromCapture()
+        onRequestVirtualDesktops: desks => root.requestVirtualDesktops(desks)
+        onRequestNewVirtualDesktop: root.requestNewVirtualDesktop()
+        onRequestActivities: acts => root.requestActivities(acts)
+        onRequestClose: root.closed()
     }
 
     // GNOME-style Close button in top-right corner of card (always visible)

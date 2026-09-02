@@ -51,12 +51,17 @@ Item {
         pageRoot.taskClosed();
     }
 
+    TaskManager.ActivityInfo {
+        id: pageActivityInfo
+    }
+
     TaskManager.TasksModel {
         id: pageTasksModel
         filterByVirtualDesktop: true
         virtualDesktop: pageRoot.desktopId
         filterByCurrentVirtualDesktop: false
-        filterByActivity: false
+        filterByActivity: true
+        activity: pageActivityInfo.currentActivity
         filterByScreen: false
         filterHidden: false
         filterMinimized: false
@@ -308,6 +313,25 @@ Item {
                 readonly property var itemWinIds: model.WinIdList ? model.WinIdList : []
                 readonly property bool itemIsActive: Boolean(model.IsActive)
                 readonly property bool itemIsMinimized: Boolean(model.IsMinimized)
+                readonly property bool itemIsMaximized: Boolean(model.IsMaximized)
+                readonly property bool itemIsKeepAbove: Boolean(model.IsKeepAbove)
+                readonly property bool itemIsKeepBelow: Boolean(model.IsKeepBelow)
+                readonly property bool itemIsFullScreen: Boolean(model.IsFullScreen)
+                readonly property bool itemIsShaded: Boolean(model.IsShaded)
+                readonly property bool itemIsOnAllDesktops: Boolean(model.IsOnAllVirtualDesktops)
+                readonly property bool itemCanLaunchNewInstance: Boolean(model.CanLaunchNewInstance)
+                readonly property bool itemIsClosable: model.IsClosable !== undefined ? Boolean(model.IsClosable) : true
+                readonly property bool itemIsMovable: Boolean(model.IsMovable)
+                readonly property bool itemIsResizable: Boolean(model.IsResizable)
+                readonly property bool itemIsMaximizable: model.IsMaximizable !== undefined ? Boolean(model.IsMaximizable) : true
+                readonly property bool itemIsMinimizable: model.IsMinimizable !== undefined ? Boolean(model.IsMinimizable) : true
+                readonly property bool itemIsFullScreenable: model.IsFullScreenable !== undefined ? Boolean(model.IsFullScreenable) : true
+                readonly property bool itemIsShadeable: Boolean(model.IsShadeable)
+                readonly property bool itemHasNoBorder: Boolean(model.HasNoBorder)
+                readonly property bool itemCanSetNoBorder: Boolean(model.CanSetNoBorder)
+                readonly property bool itemIsExcludedFromCapture: Boolean(model.IsExcludedFromCapture)
+                readonly property var itemVirtualDesktops: model.VirtualDesktops || []
+                readonly property var itemActivities: model.Activities || []
                 readonly property var itemGeom: model.Geometry
 
                 visible: !isSelf
@@ -349,6 +373,25 @@ Item {
                     itemIndex: cellItem.index
                     overviewOpen: pageRoot.overviewOpen && pageRoot.isCurrentPage
                     isMinimized: cellItem.itemIsMinimized
+                    isMaximized: cellItem.itemIsMaximized
+                    isKeepAbove: cellItem.itemIsKeepAbove
+                    isKeepBelow: cellItem.itemIsKeepBelow
+                    isFullScreen: cellItem.itemIsFullScreen
+                    isShaded: cellItem.itemIsShaded
+                    isOnAllDesktops: cellItem.itemIsOnAllDesktops
+                    canLaunchNewInstance: cellItem.itemCanLaunchNewInstance
+                    isClosable: cellItem.itemIsClosable
+                    isMovable: cellItem.itemIsMovable
+                    isResizable: cellItem.itemIsResizable
+                    isMaximizable: cellItem.itemIsMaximizable
+                    isMinimizable: cellItem.itemIsMinimizable
+                    isFullScreenable: cellItem.itemIsFullScreenable
+                    isShadeable: cellItem.itemIsShadeable
+                    hasNoBorder: cellItem.itemHasNoBorder
+                    canSetNoBorder: cellItem.itemCanSetNoBorder
+                    isExcludedFromCapture: cellItem.itemIsExcludedFromCapture
+                    virtualDesktops: cellItem.itemVirtualDesktops
+                    activities: cellItem.itemActivities
                     windowTitle: cellItem.itemTitle
                     windowIcon: cellItem.itemIcon
                     appLabel: cellItem.itemAppName
@@ -361,11 +404,27 @@ Item {
                     showTitle: true
                     showCloseButton: pageRoot.showCloseButtons
 
+                    onRequestNewInstance: pageTasksModel.requestNewInstance(pageTasksModel.makeModelIndex(cellItem.index))
+                    onRequestMove: pageTasksModel.requestMove(pageTasksModel.makeModelIndex(cellItem.index))
+                    onRequestResize: pageTasksModel.requestResize(pageTasksModel.makeModelIndex(cellItem.index))
+                    onRequestToggleMaximized: pageTasksModel.requestToggleMaximized(pageTasksModel.makeModelIndex(cellItem.index))
+                    onRequestToggleMinimized: pageTasksModel.requestToggleMinimized(pageTasksModel.makeModelIndex(cellItem.index))
+                    onRequestToggleKeepAbove: pageTasksModel.requestToggleKeepAbove(pageTasksModel.makeModelIndex(cellItem.index))
+                    onRequestToggleKeepBelow: pageTasksModel.requestToggleKeepBelow(pageTasksModel.makeModelIndex(cellItem.index))
+                    onRequestToggleFullScreen: pageTasksModel.requestToggleFullScreen(pageTasksModel.makeModelIndex(cellItem.index))
+                    onRequestToggleShaded: pageTasksModel.requestToggleShaded(pageTasksModel.makeModelIndex(cellItem.index))
+                    onRequestToggleNoBorder: pageTasksModel.requestToggleNoBorder(pageTasksModel.makeModelIndex(cellItem.index))
+                    onRequestToggleExcludeFromCapture: pageTasksModel.requestToggleExcludeFromCapture(pageTasksModel.makeModelIndex(cellItem.index))
+                    onRequestVirtualDesktops: desks => pageTasksModel.requestVirtualDesktops(pageTasksModel.makeModelIndex(cellItem.index), desks)
+                    onRequestNewVirtualDesktop: pageTasksModel.requestNewVirtualDesktop(pageTasksModel.makeModelIndex(cellItem.index))
+                    onRequestActivities: acts => pageTasksModel.requestActivities(pageTasksModel.makeModelIndex(cellItem.index), acts)
+
                     onAspectDiscovered: asp => {
                         cellItem.customAspect = asp;
                     }
 
                     onActivated: pageRoot.activateTask(cellItem.index)
+                    onSelected: pageRoot.selectedIndex = cellItem.index
                     onClosed: pageRoot.closeTask(cellItem.index)
 
                     onDragStarted: (originX, originY, grabX, grabY) => {

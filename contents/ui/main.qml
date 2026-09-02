@@ -63,10 +63,15 @@ PlasmoidItem {
         root.lastSwitchedDesktop = String(desktopId);
     }
 
+    TaskManager.ActivityInfo {
+        id: globalActivityInfo
+    }
+
     TaskManager.TasksModel {
         id: globalFocusMonitor
         filterByVirtualDesktop: false
-        filterByActivity: false
+        filterByActivity: true
+        activity: globalActivityInfo.currentActivity
         filterByScreen: false
         filterHidden: false
         filterMinimized: false
@@ -117,20 +122,6 @@ PlasmoidItem {
         }
     }
 
-    Timer {
-        id: focusTimer
-        interval: 50 // Delay to ensure Wayland maps the surface before grabbing focus
-        onTriggered: {
-            if (root.isOverviewOpen && overviewDialog.visible) {
-                overviewDialog.requestActivate();
-                if (overviewOverlay) {
-                    overviewOverlay.forceActiveFocus();
-                    overviewOverlay.openOverview();
-                }
-            }
-        }
-    }
-
     function toggleOverview() {
         if (isOverviewOpen) {
             closeOverview();
@@ -152,9 +143,12 @@ PlasmoidItem {
         isOverviewOpen = true;
         overviewOverlay.opacity = 0;
         overviewDialog.opacity = 0;
-        overviewDialog.visible = true;
+        
+        if (overviewOverlay) {
+            overviewOverlay.openOverview();
+        }
 
-        focusTimer.restart();
+        overviewDialog.visible = true;
 
         fadeInAnim.restart();
 
@@ -177,7 +171,10 @@ PlasmoidItem {
 
     function grabOverviewFocus() {
         if (isOverviewOpen && overviewDialog.visible) {
-            focusTimer.restart();
+            overviewDialog.requestActivate();
+            if (overviewOverlay) {
+                overviewOverlay.forceActiveFocus();
+            }
         }
     }
 
@@ -271,8 +268,19 @@ PlasmoidItem {
         opacity: 0
         visible: false
 
+        property bool _needsFocusGrab: false
+
         onVisibleChanged: {
             if (visible) {
+                _needsFocusGrab = true;
+            } else {
+                _needsFocusGrab = false;
+            }
+        }
+
+        onFrameSwapped: {
+            if (_needsFocusGrab) {
+                _needsFocusGrab = false;
                 root.grabOverviewFocus();
             }
         }

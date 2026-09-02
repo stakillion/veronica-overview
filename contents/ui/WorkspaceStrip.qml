@@ -177,10 +177,16 @@ Item {
                             anchors.fill: parent
                             anchors.margins: 2
 
+                            TaskManager.ActivityInfo {
+                                id: stripActivityInfo
+                            }
+
                             TaskManager.TasksModel {
                                 id: wsTasks
                                 filterByVirtualDesktop: true
                                 virtualDesktop: desktopCard.modelData
+                                filterByActivity: true
+                                activity: stripActivityInfo.currentActivity
                                 filterHidden: false
                                 filterMinimized: false
                                 filterNotMinimized: false

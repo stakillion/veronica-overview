@@ -54,13 +54,6 @@ Item {
 
     activeFocusOnTab: true
 
-    onActiveFocusChanged: {
-        if (activeFocus && root.plasmoidItem.isOverviewOpen) {
-            // Re-route tab-navigation focus immediately
-            root.plasmoidItem.grabOverviewFocus();
-        }
-    }
-
     Keys.onPressed: event => {
         switch (event.key) {
         case Qt.Key_Space:
