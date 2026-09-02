@@ -56,6 +56,10 @@ Item {
         id: desktopInfo
     }
 
+    PagerContextMenu {
+        id: pagerContextMenu
+    }
+
     function switchDesktop(desktopId, index) {
         DBus.SessionBus.asyncCall({
             service: "org.kde.KWin",
@@ -251,12 +255,17 @@ Item {
                     id: cardMouse
                     anchors.fill: parent
                     hoverEnabled: true
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        if (desktopCard.isCurrent) {
-                            root.currentDesktopClicked();
-                        } else {
-                            root.switchDesktop(desktopCard.modelData, desktopCard.index);
+                    onClicked: mouse => {
+                        if (mouse.button === Qt.RightButton) {
+                            pagerContextMenu.popup(cardMouse, mouse.x, mouse.y);
+                        } else if (mouse.button === Qt.LeftButton) {
+                            if (desktopCard.isCurrent) {
+                                root.currentDesktopClicked();
+                            } else {
+                                root.switchDesktop(desktopCard.modelData, desktopCard.index);
+                            }
                         }
                     }
                 }
