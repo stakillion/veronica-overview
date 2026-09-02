@@ -52,7 +52,30 @@ Item {
     Layout.fillWidth: vertical
     Layout.fillHeight: !vertical
 
-    activeFocusOnTab: false
+    activeFocusOnTab: true
+
+    onActiveFocusChanged: {
+        if (activeFocus && root.plasmoidItem.isOverviewOpen) {
+            // Re-route tab-navigation focus immediately
+            root.plasmoidItem.grabOverviewFocus();
+        }
+    }
+
+    Keys.onPressed: event => {
+        switch (event.key) {
+        case Qt.Key_Space:
+        case Qt.Key_Enter:
+        case Qt.Key_Return:
+        case Qt.Key_Select:
+            Plasmoid.activated();
+            event.accepted = true; // Prevent system tray from receiving the event
+            break;
+        }
+    }
+
+    Accessible.name: Plasmoid.title
+    Accessible.description: root.plasmoidItem.toolTipSubText ?? ""
+    Accessible.role: Accessible.Button
 
     // Native KDE Plasma Panel Active Tab / Button Indicator
     KSvg.FrameSvgItem {
@@ -191,13 +214,26 @@ Item {
     MouseArea {
         id: mouseArea
 
+        property bool wasExpanded: false
+
         anchors.fill: parent
         hoverEnabled: true
-        cursorShape: Qt.ArrowCursor
-        activeFocusOnTab: false
 
-        onClicked: {
-            root.plasmoidItem.toggleOverview();
+        onPressed: {
+            wasExpanded = root.plasmoidItem.isOverviewOpen;
+            root.forceActiveFocus(); // Claim immediate local focus to validate Wayland click event token
+        }
+
+        onClicked: mouse => {
+            if (mouse.button === Qt.MiddleButton) {
+                Plasmoid.secondaryActivated();
+            } else {
+                if (wasExpanded) {
+                    root.plasmoidItem.closeOverview();
+                } else {
+                    root.plasmoidItem.openOverview();
+                }
+            }
         }
     }
 }

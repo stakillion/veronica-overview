@@ -111,20 +111,32 @@ Rectangle {
         }
 
         // Clear search text button
-        Rectangle {
-            id: clearBtn
+        Item {
+            id: clearBtnContainer
             visible: searchInput.text.length > 0
-            width: 22
-            height: 22
-            radius: 11
-            color: clearMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.25) : Qt.rgba(1, 1, 1, 0.12)
+            Layout.preferredWidth: 24
+            Layout.preferredHeight: 24
+            Layout.alignment: Qt.AlignVCenter
 
-            Kirigami.Icon {
+            Rectangle {
+                id: clearBtn
                 anchors.centerIn: parent
-                source: "edit-clear-symbolic"
-                implicitWidth: 14
-                implicitHeight: 14
-                color: "#ffffff"
+                width: 20
+                height: 20
+                radius: 10
+                color: clearMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.25) : Qt.rgba(1, 1, 1, 0.12)
+
+                Kirigami.Icon {
+                    source: "edit-clear-symbolic"
+                    anchors.centerIn: parent
+                    anchors.alignWhenCentered: true
+                    width: Math.round(parent.width * 0.7)
+                    height: width
+                    implicitWidth: width
+                    implicitHeight: height
+                    color: "#ffffff"
+                    isMask: true
+                }
             }
 
             MouseArea {

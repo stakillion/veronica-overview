@@ -28,7 +28,7 @@ PlasmoidItem {
     Plasmoid.status: root.isOverviewOpen ? PlasmaCore.Types.AcceptingInputStatus : PlasmaCore.Types.ActiveStatus
     Plasmoid.backgroundHints: PlasmaCore.Types.DefaultBackground
     Plasmoid.userBackgroundHints: PlasmaCore.Types.DefaultBackground
-    expanded: root.isOverviewOpen
+    expanded: false
 
     activationTogglesExpanded: false
     hideOnWindowDeactivate: false
@@ -117,6 +117,20 @@ PlasmoidItem {
         }
     }
 
+    Timer {
+        id: focusTimer
+        interval: 50 // Delay to ensure Wayland maps the surface before grabbing focus
+        onTriggered: {
+            if (root.isOverviewOpen && overviewDialog.visible) {
+                overviewDialog.requestActivate();
+                if (overviewOverlay) {
+                    overviewOverlay.forceActiveFocus();
+                    overviewOverlay.openOverview();
+                }
+            }
+        }
+    }
+
     function toggleOverview() {
         if (isOverviewOpen) {
             closeOverview();
@@ -137,15 +151,10 @@ PlasmoidItem {
 
         isOverviewOpen = true;
         overviewOverlay.opacity = 0;
+        overviewDialog.opacity = 0;
         overviewDialog.visible = true;
 
-        Qt.callLater(() => {
-            overviewDialog.requestActivate();
-            if (overviewOverlay) {
-                overviewOverlay.forceActiveFocus();
-                overviewOverlay.openOverview();
-            }
-        });
+        focusTimer.restart();
 
         fadeInAnim.restart();
 
@@ -160,10 +169,21 @@ PlasmoidItem {
     }
 
     function closeOverview() {
-        isOverviewOpen = false;
+        if (!isOverviewOpen) return;
 
         fadeInAnim.stop();
         fadeOutAnim.restart();
+    }
+
+    function grabOverviewFocus() {
+        if (isOverviewOpen && overviewDialog.visible) {
+            focusTimer.restart();
+        }
+    }
+
+    function finalizeClose() {
+        isOverviewOpen = false;
+        overviewDialog.visible = false;
 
         // Restore panels back to their original hiding mode and clear temporary config key
         DBus.SessionBus.asyncCall({
@@ -179,28 +199,46 @@ PlasmoidItem {
         root.toggleOverview();
     }
 
-    NumberAnimation {
+    ParallelAnimation {
         id: fadeInAnim
-        target: overviewOverlay
-        property: "opacity"
-        from: overviewOverlay.opacity
-        to: 1
-        duration: Kirigami.Units.shortDuration
-        easing.type: Easing.OutCubic
+        NumberAnimation {
+            target: overviewDialog
+            property: "opacity"
+            from: overviewDialog.opacity
+            to: 1
+            duration: Kirigami.Units.shortDuration
+            easing.type: Easing.OutCubic
+        }
+        NumberAnimation {
+            target: overviewOverlay
+            property: "opacity"
+            from: overviewOverlay.opacity
+            to: 1
+            duration: Kirigami.Units.shortDuration
+            easing.type: Easing.OutCubic
+        }
     }
 
-    NumberAnimation {
+    ParallelAnimation {
         id: fadeOutAnim
-        target: overviewOverlay
-        property: "opacity"
-        from: overviewOverlay.opacity
-        to: 0
-        duration: Kirigami.Units.shortDuration
-        easing.type: Easing.InCubic
+        NumberAnimation {
+            target: overviewDialog
+            property: "opacity"
+            from: overviewDialog.opacity
+            to: 0
+            duration: Kirigami.Units.shortDuration
+            easing.type: Easing.InCubic
+        }
+        NumberAnimation {
+            target: overviewOverlay
+            property: "opacity"
+            from: overviewOverlay.opacity
+            to: 0
+            duration: Kirigami.Units.shortDuration
+            easing.type: Easing.InCubic
+        }
         onFinished: {
-            if (!root.isOverviewOpen) {
-                overviewDialog.visible = false;
-            }
+            root.finalizeClose();
         }
     }
 
@@ -224,23 +262,18 @@ PlasmoidItem {
         id: overviewDialog
 
         title: "Veronica Overview"
-        type: PlasmaCore.Dialog.Normal
+        type: PlasmaCore.Dialog.FullScreen
         location: PlasmaCore.Types.Floating
         visualParent: compactView
         backgroundHints: PlasmaCore.Dialog.StandardBackground
         flags: Qt.FramelessWindowHint | Qt.Window | Qt.CustomizeWindowHint
         hideOnWindowDeactivate: false
+        opacity: 0
         visible: false
 
         onVisibleChanged: {
             if (visible) {
-                Qt.callLater(() => {
-                    overviewDialog.requestActivate();
-                    if (overviewOverlay) {
-                        overviewOverlay.forceActiveFocus();
-                        overviewOverlay.openOverview();
-                    }
-                });
+                root.grabOverviewFocus();
             }
         }
 
