@@ -360,16 +360,39 @@ FocusScope {
                     }
                     onEmptyAreaClicked: root.dismissOverview()
 
-                    onWindowDragStarted: (pageIdx, taskRow, winIds, title, iconSource, appName, cardW, cardH, ox, oy, gx, gy) => {
+                    onWindowDragStarted: (pageIdx, taskRow, winIds, title, iconSource, appName, cardW, cardH, aspect, ox, oy, gx, gy) => {
                         dragOverlay.sourcePageIndex = pageIdx;
                         dragOverlay.sourceTaskRow = taskRow;
                         dragOverlay.sourceWinIds = winIds;
                         dragOverlay.cardTitle = title;
                         dragOverlay.cardIcon = iconSource;
 
-                        const targetScale = 0.50;
-                        dragOverlay.cardWidth = Math.max(100, Math.round(cardW * targetScale));
-                        dragOverlay.cardHeight = Math.max(70, Math.round(cardH * targetScale));
+                        // Non-preview overhead in dragOverlay:
+                        // Horizontal: 6px left margin + 6px right margin = 12px
+                        // Vertical: 6px top margin + 20px header + 4px spacing + 6px bottom margin = 36px
+                        const nonPreviewW = 12;
+                        const nonPreviewH = 36;
+
+                        // Target preview aspect ratio matching the live window preview exactly
+                        const a = (aspect && aspect > 0) ? aspect : ((cardW > 12 && cardH > 40) ? ((cardW - 12) / (cardH - 40)) : 1.6);
+                        const maxPreviewW = 210;
+                        const maxPreviewH = 135;
+
+                        let pw, ph;
+                        if (a >= (maxPreviewW / maxPreviewH)) {
+                            pw = maxPreviewW;
+                            ph = Math.round(pw / a);
+                        } else {
+                            ph = maxPreviewH;
+                            pw = Math.round(ph * a);
+                        }
+
+                        pw = Math.max(90, pw);
+                        ph = Math.max(60, ph);
+
+                        // Card bounds = preview dimensions + overhead so previewArea matches the window aspect ratio 1:1
+                        dragOverlay.cardWidth = pw + nonPreviewW;
+                        dragOverlay.cardHeight = ph + nonPreviewH;
 
                         dragOverlay.grabOffsetX = dragOverlay.cardWidth / 2;
                         dragOverlay.grabOffsetY = dragOverlay.cardHeight / 2;
@@ -574,8 +597,8 @@ FocusScope {
         property var sourceWinIds: []
         property string cardTitle: ""
         property var cardIcon: null
-        property real cardWidth: 220
-        property real cardHeight: 140
+        property real cardWidth: 222
+        property real cardHeight: 154
         property real grabOffsetX: 0
         property real grabOffsetY: 0
         property real startGlobalX: 0

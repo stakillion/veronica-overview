@@ -21,7 +21,7 @@ Item {
     signal taskActivated()
     signal taskClosed()
     signal emptyAreaClicked()
-    signal windowDragStarted(int pageIndex, int taskRow, var winIds, string title, var icon, string appName, real cardW, real cardH, real globalOriginX, real globalOriginY, real grabX, real grabY)
+    signal windowDragStarted(int pageIndex, int taskRow, var winIds, string title, var icon, string appName, real cardW, real cardH, real aspect, real globalOriginX, real globalOriginY, real grabX, real grabY)
     signal windowDragMoved(real globalX, real globalY)
     signal windowDragEnded(real globalX, real globalY)
     signal windowDragCanceled()
@@ -402,7 +402,7 @@ Item {
 
                     onDragStarted: (originX, originY, grabX, grabY) => {
                         pageRoot.draggedTaskIndex = cellItem.index;
-                        pageRoot.windowDragStarted(pageRoot.pageIndex, cellItem.index, cellItem.itemWinIds, cellItem.itemTitle, cellItem.itemIcon, cellItem.itemAppName, cellItem.width, cellItem.height, originX, originY, grabX, grabY);
+                        pageRoot.windowDragStarted(pageRoot.pageIndex, cellItem.index, cellItem.itemWinIds, cellItem.itemTitle, cellItem.itemIcon, cellItem.itemAppName, cellItem.width, cellItem.height, cellItem.effectiveAspect, originX, originY, grabX, grabY);
                     }
                     onDragMoved: (gx, gy) => pageRoot.windowDragMoved(gx, gy)
                     onDragEnded: (gx, gy) => pageRoot.windowDragEnded(gx, gy)
