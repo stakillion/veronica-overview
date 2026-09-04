@@ -122,6 +122,32 @@ PlasmoidItem {
         }
     }
 
+    readonly property string kwinScriptPath: {
+        const url = Qt.resolvedUrl("../code/overviewDesktopController.js").toString();
+        return url.replace(/^file:\/\//, "");
+    }
+
+    function ensureKWinScriptLoaded() {
+        DBus.SessionBus.asyncCall({
+            service: "org.kde.KWin",
+            path: "/Scripting",
+            iface: "org.kde.kwin.Scripting",
+            member: "loadScript",
+            arguments: [root.kwinScriptPath]
+        });
+        DBus.SessionBus.asyncCall({
+            service: "org.kde.KWin",
+            path: "/Scripting",
+            iface: "org.kde.kwin.Scripting",
+            member: "start",
+            arguments: []
+        });
+    }
+
+    Component.onCompleted: {
+        root.ensureKWinScriptLoaded();
+    }
+
     function toggleOverview() {
         if (isOverviewOpen) {
             closeOverview();
@@ -131,6 +157,7 @@ PlasmoidItem {
     }
 
     function openOverview() {
+        root.ensureKWinScriptLoaded();
         root.ignoreWindowMoveActivation = false;
         root.lastSwitchedDesktop = null;
         if (globalFocusMonitor.activeTask && globalFocusMonitor.activeTask.valid) {
