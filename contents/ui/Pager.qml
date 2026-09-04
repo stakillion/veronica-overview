@@ -3,6 +3,8 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import QtQuick.Window
 import org.kde.kirigami as Kirigami
+import org.kde.plasma.extras as PlasmaExtras
+import org.kde.kcmutils as KCMUtils
 import org.kde.taskmanager as TaskManager
 import org.kde.plasma.workspace.dbus as DBus
 
@@ -12,7 +14,7 @@ Item {
     height: 104
     Layout.fillWidth: true
 
-    signal desktopSelected(var desktopId)
+    signal desktopSelected(var desktopId, int index)
     signal currentDesktopClicked()
 
     property string highlightedDesktopId: ""
@@ -56,29 +58,63 @@ Item {
         id: desktopInfo
     }
 
-    PagerContextMenu {
-        id: pagerContextMenu
-    }
-
-    function switchDesktop(desktopId, index) {
+    function addVirtualDesktop() {
+        const nextIdx = desktopInfo.numberOfDesktops;
+        const name = i18n("Desktop %1", nextIdx + 1);
         DBus.SessionBus.asyncCall({
             service: "org.kde.KWin",
             path: "/VirtualDesktopManager",
-            iface: "org.freedesktop.DBus.Properties",
-            member: "Set",
-            arguments: ["org.kde.KWin.VirtualDesktopManager", "current", desktopId]
+            iface: "org.kde.KWin.VirtualDesktopManager",
+            member: "createDesktop",
+            arguments: [nextIdx, name]
         });
-
-        DBus.SessionBus.asyncCall({
-            service: "org.kde.KWin",
-            path: "/KWin",
-            iface: "org.kde.KWin",
-            member: "setCurrentDesktop",
-            arguments: [index + 1]
-        });
-
-        desktopSelected(desktopId);
     }
+
+    function removeVirtualDesktop() {
+        if (desktopInfo.numberOfDesktops <= 1) return;
+        const ids = desktopInfo.desktopIds;
+        if (ids && ids.length > 0) {
+            const lastId = String(ids[ids.length - 1]);
+            DBus.SessionBus.asyncCall({
+                service: "org.kde.KWin",
+                path: "/VirtualDesktopManager",
+                iface: "org.kde.KWin.VirtualDesktopManager",
+                member: "removeDesktop",
+                arguments: [lastId]
+            });
+        }
+    }
+
+    PlasmaExtras.Menu {
+        id: pagerContextMenu
+        minimumWidth: Kirigami.Units.gridUnit * 12
+
+        PlasmaExtras.MenuItem {
+            text: i18n("Add Virtual Desktop")
+            icon: "list-add"
+            onClicked: root.addVirtualDesktop()
+        }
+
+        PlasmaExtras.MenuItem {
+            text: i18n("Remove Virtual Desktop")
+            icon: "list-remove"
+            enabled: desktopInfo.numberOfDesktops > 1
+            onClicked: root.removeVirtualDesktop()
+        }
+
+        PlasmaExtras.MenuItem {
+            separator: true
+        }
+
+        PlasmaExtras.MenuItem {
+            text: i18n("Configure Virtual Desktops…")
+            onClicked: {
+                KCMUtils.KCMLauncher.openSystemSettings("kcm_kwin_virtualdesktops");
+            }
+        }
+    }
+
+
 
     // Centered horizontal row of workspace cards matching native KDE Plasma Pager
     RowLayout {
@@ -259,12 +295,13 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: mouse => {
                         if (mouse.button === Qt.RightButton) {
-                            pagerContextMenu.popup(cardMouse, mouse.x, mouse.y);
+                            pagerContextMenu.visualParent = cardMouse;
+                            pagerContextMenu.open(Math.round(mouse.x), Math.round(mouse.y));
                         } else if (mouse.button === Qt.LeftButton) {
                             if (desktopCard.isCurrent) {
                                 root.currentDesktopClicked();
                             } else {
-                                root.switchDesktop(desktopCard.modelData, desktopCard.index);
+                                root.desktopSelected(desktopCard.modelData, desktopCard.index);
                             }
                         }
                     }

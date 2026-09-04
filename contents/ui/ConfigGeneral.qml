@@ -10,7 +10,6 @@ Kirigami.FormLayout {
     id: root
 
     property alias cfg_icon: iconButton.iconName
-    property alias cfg_buttonIconName: iconButton.iconName
     property alias cfg_buttonText: buttonTextField.text
     property alias cfg_showButtonText: showButtonTextCheckBox.checked
     property alias cfg_showButtonIcon: showButtonIconCheckBox.checked
@@ -22,7 +21,6 @@ Kirigami.FormLayout {
     property string cfg_buttonFontStyleName: Plasmoid.configuration.buttonFontStyleName !== undefined ? Plasmoid.configuration.buttonFontStyleName : ""
 
     property alias cfg_showWorkspaceStrip: showWorkspaceStripCheckBox.checked
-    property alias cfg_filterOnlyCurrentDesktop: filterOnlyCurrentDesktopCheckBox.checked
     property alias cfg_showCloseButtons: showCloseButtonsCheckBox.checked
     property alias cfg_hasBottomPanel: hasBottomPanelCheckBox.checked
 
@@ -182,14 +180,8 @@ Kirigami.FormLayout {
 
     QQC2.CheckBox {
         id: showWorkspaceStripCheckBox
-        Kirigami.FormData.label: i18n("Workspaces:")
+        Kirigami.FormData.label: i18n("Pager:")
         text: i18n("Show virtual desktops pager bar at top")
-    }
-
-    QQC2.CheckBox {
-        id: filterOnlyCurrentDesktopCheckBox
-        Kirigami.FormData.label: i18n("Window Filter:")
-        text: i18n("Only show windows from active virtual desktop")
     }
 
     QQC2.CheckBox {

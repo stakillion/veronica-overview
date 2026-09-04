@@ -36,13 +36,7 @@
     <entry name="icon" type="String">
       <default>search</default>
     </entry>
-    <entry name="buttonIconName" type="String">
-      <default>search</default>
-    </entry>
     <entry name="showWorkspaceStrip" type="Bool">
-      <default>true</default>
-    </entry>
-    <entry name="filterOnlyCurrentDesktop" type="Bool">
       <default>true</default>
     </entry>
     <entry name="showCloseButtons" type="Bool">

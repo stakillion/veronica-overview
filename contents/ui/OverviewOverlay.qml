@@ -9,6 +9,7 @@ import org.kde.pipewire as PipeWire
 import org.kde.ksvg as KSvg
 import org.kde.plasma.workspace.dbus as DBus
 import org.kde.taskmanager as TaskManager
+import org.kde.milou as Milou
 
 FocusScope {
     id: root
@@ -30,6 +31,9 @@ FocusScope {
             openOverview();
         } else {
             if (searchBar) searchBar.text = "";
+            if (carouselTrack) {
+                carouselTrack.readyToAnimate = false;
+            }
         }
     }
 
@@ -39,9 +43,13 @@ FocusScope {
             searchBar.searchField.focus = false;
         }
         root.forceActiveFocus();
-        if (windowGrid) {
-            windowGrid.resetTracking();
-            windowGrid.updateDefaultSelection();
+        if (carouselTrack) {
+            carouselTrack.readyToAnimate = false;
+            carouselTrack.resetTracking();
+            carouselTrack.updateDefaultSelection();
+            Qt.callLater(() => {
+                carouselTrack.readyToAnimate = true;
+            });
         }
     }
 
@@ -71,14 +79,7 @@ FocusScope {
         const ids = desktopInfo.desktopIds;
         if (!ids || ids.length <= 1) return;
 
-        const currentId = desktopInfo.currentDesktop;
-        let currentIndex = -1;
-        for (let i = 0; i < ids.length; i++) {
-            if (ids[i] === currentId) {
-                currentIndex = i;
-                break;
-            }
-        }
+        const currentIndex = ids.indexOf(desktopInfo.currentDesktop);
         if (currentIndex > 0) {
             const targetIdx = currentIndex - 1;
             root.scrollCooldown = true;
@@ -94,14 +95,7 @@ FocusScope {
         const ids = desktopInfo.desktopIds;
         if (!ids || ids.length <= 1) return;
 
-        const currentId = desktopInfo.currentDesktop;
-        let currentIndex = -1;
-        for (let i = 0; i < ids.length; i++) {
-            if (ids[i] === currentId) {
-                currentIndex = i;
-                break;
-            }
-        }
+        const currentIndex = ids.indexOf(desktopInfo.currentDesktop);
         if (currentIndex >= 0 && currentIndex < ids.length - 1) {
             const targetIdx = currentIndex + 1;
             root.scrollCooldown = true;
@@ -164,11 +158,6 @@ FocusScope {
         onClicked: mouse => {
             root.dismissOverview();
         }
-        onWheel: wheel => {
-            if (!searchResults || !searchResults.visible) {
-                root.handleScroll(wheel.angleDelta.y);
-            }
-        }
         z: -1
     }
 
@@ -192,13 +181,13 @@ FocusScope {
         spacing: Kirigami.Units.mediumSpacing
         z: 10
 
-        // 1. Top Workspace Strip (Virtual Desktops Pager) - Centered and ALWAYS visible
-        WorkspaceStrip {
-            id: workspaceStrip
+        // 1. Top Virtual Desktop Pager - Centered and ALWAYS visible
+        Pager {
+            id: pager
             visible: root.showWorkspaceStrip
             Layout.fillWidth: true
 
-            onDesktopSelected: desktopId => root.requestDesktopSwitch(desktopId)
+            onDesktopSelected: (desktopId, index) => root.switchToDesktop(desktopId, index)
             onCurrentDesktopClicked: root.dismissOverview()
         }
 
@@ -208,7 +197,7 @@ FocusScope {
             Layout.alignment: Qt.AlignHCenter
 
             onSearchFieldFocused: {
-                windowGrid.clearSelection();
+                carouselTrack.clearSelection();
             }
             onAccepted: {
                 if (searchResults.visible) {
@@ -223,7 +212,7 @@ FocusScope {
                 } else {
                     searchBar.searchField.focus = false;
                     root.forceActiveFocus();
-                    windowGrid.updateDefaultSelection();
+                    carouselTrack.updateDefaultSelection();
                 }
             }
             onMoveSelectionUp: {
@@ -236,7 +225,7 @@ FocusScope {
                     searchBar.text = "";
                     searchBar.searchField.focus = false;
                     root.forceActiveFocus();
-                    windowGrid.updateDefaultSelection();
+                    carouselTrack.updateDefaultSelection();
                 } else {
                     root.dismissOverview();
                 }
@@ -244,11 +233,9 @@ FocusScope {
         }
     }
 
-    // Window Grid (Exposé) - Positioned strictly BELOW topHeader with clip to NEVER overlap
-    WindowGrid {
-        id: windowGrid
-        overviewOpen: root.isOverviewOpen
-        lastActiveWinId: root.lastActiveWinId
+    // Multi-page sliding workspace carousel
+    Item {
+        id: carouselTrack
         anchors.top: topHeader.bottom
         anchors.bottom: parent.bottom
         anchors.left: parent.left
@@ -256,71 +243,182 @@ FocusScope {
         anchors.topMargin: Kirigami.Units.largeSpacing
         anchors.bottomMargin: (Plasmoid.configuration.hasBottomPanel) ? 56 : Kirigami.Units.largeSpacing
         visible: searchBar.text.length === 0
-        cardRadius: root.cardRadius
-        showCloseButtons: Plasmoid.configuration.showCloseButtons !== undefined ? Plasmoid.configuration.showCloseButtons : true
-        filterOnlyCurrentDesktop: Plasmoid.configuration.filterOnlyCurrentDesktop !== undefined ? Plasmoid.configuration.filterOnlyCurrentDesktop : true
         clip: true
         z: 1
 
-        onWindowActivated: root.dismissOverview()
-        onEmptyAreaClicked: root.dismissOverview()
+        property int layoutRefreshTick: 0
+        property bool readyToAnimate: false
 
-        onWindowDragStarted: (pageIdx, taskRow, winIds, title, iconSource, appName, cardW, cardH, ox, oy, gx, gy) => {
-            dragOverlay.sourcePageIndex = pageIdx;
-            dragOverlay.sourceTaskRow = taskRow;
-            dragOverlay.sourceWinIds = winIds;
-            dragOverlay.cardTitle = title;
-            dragOverlay.cardIcon = iconSource;
-
-            const targetScale = 0.50;
-            dragOverlay.cardWidth = Math.max(100, Math.round(cardW * targetScale));
-            dragOverlay.cardHeight = Math.max(70, Math.round(cardH * targetScale));
-
-            dragOverlay.grabOffsetX = dragOverlay.cardWidth / 2;
-            dragOverlay.grabOffsetY = dragOverlay.cardHeight / 2;
-
-            dragOverlay.startGlobalX = ox + (cardW - dragOverlay.cardWidth) / 2;
-            dragOverlay.startGlobalY = oy + (cardH - dragOverlay.cardHeight) / 2;
-
-            dragOverlay.currentGlobalX = gx - dragOverlay.grabOffsetX;
-            dragOverlay.currentGlobalY = gy - dragOverlay.grabOffsetY;
-
-            dragOverlay.opacity = 1.0;
-            dragOverlay.isDragging = true;
-            snapBackAnim.stop();
+        readonly property int pageCount: Math.max(1, desktopInfo.desktopIds ? desktopInfo.desktopIds.length : 1)
+        readonly property int currentDesktopIndex: {
+            const ids = desktopInfo.desktopIds;
+            const cur = desktopInfo.currentDesktop;
+            if (!ids || ids.length === 0) return 0;
+            const idx = ids.indexOf(cur);
+            return idx >= 0 ? idx : 0;
         }
-        onWindowDragMoved: (gx, gy) => {
-            if (!dragOverlay.isDragging) return;
-            dragOverlay.currentGlobalX = gx - dragOverlay.grabOffsetX;
-            dragOverlay.currentGlobalY = gy - dragOverlay.grabOffsetY;
 
-            const target = workspaceStrip.getDesktopAt(gx, gy);
-            workspaceStrip.highlightedDesktopId = target ? target.desktopId : "";
+        onCurrentDesktopIndexChanged: {
+            carouselTrack.layoutRefreshTick++;
         }
-        onWindowDragEnded: (gx, gy) => {
-            if (!dragOverlay.isDragging) return;
 
-            const target = workspaceStrip.getDesktopAt(gx, gy);
-            workspaceStrip.highlightedDesktopId = "";
+        Component.onCompleted: {
+            Qt.callLater(() => {
+                carouselTrack.readyToAnimate = true;
+            });
+        }
 
-            if (target && target.desktopId !== undefined) {
-                root.requestTaskMoved(target.desktopId);
-                windowGrid.moveTaskToDesktop(dragOverlay.sourcePageIndex, dragOverlay.sourceTaskRow, target.desktopId);
-                dragOverlay.isDragging = false;
-                dragOverlay.opacity = 0;
-            } else {
-                snapBackAnim.restart();
+        function resetTracking() {
+            carouselTrack.layoutRefreshTick++;
+        }
+
+        function getCurrentPage() {
+            if (!pageRepeater) return null;
+            return pageRepeater.itemAt(carouselTrack.currentDesktopIndex);
+        }
+
+        function clearSelection() {
+            const page = getCurrentPage();
+            if (page && page.clearSelection) page.clearSelection();
+        }
+
+        function updateDefaultSelection() {
+            const page = getCurrentPage();
+            if (page && page.updateDefaultSelection) page.updateDefaultSelection();
+        }
+
+        function navigateSelection(dx, dy) {
+            const page = getCurrentPage();
+            if (page && page.navigateSelection) return page.navigateSelection(dx, dy);
+            return "no_page";
+        }
+
+        function activateSelected() {
+            const page = getCurrentPage();
+            if (page && page.activateSelected) page.activateSelected();
+        }
+
+        function moveTaskToDesktop(pageIndex, taskRow, targetDesktopId) {
+            if (!pageRepeater) return;
+            const page = pageRepeater.itemAt(pageIndex);
+            if (page && page.moveTaskToDesktop) page.moveTaskToDesktop(taskRow, targetDesktopId);
+        }
+
+        // Dismiss click area covering empty background
+        MouseArea {
+            id: bgClickArea
+            anchors.fill: parent
+            z: -1
+            onClicked: root.dismissOverview()
+            onWheel: wheel => {
+                wheel.accepted = false;
             }
         }
-        onWindowDragCanceled: {
-            if (dragOverlay.isDragging) {
-                snapBackAnim.restart();
+
+        // Multi-page sliding carousel track
+        Item {
+            id: pagesTrack
+            width: carouselTrack.width * carouselTrack.pageCount
+            height: carouselTrack.height
+            x: -carouselTrack.currentDesktopIndex * carouselTrack.width
+
+            Behavior on x {
+                enabled: carouselTrack.readyToAnimate
+                NumberAnimation {
+                    duration: Kirigami.Units.longDuration > 0 ? Math.round(Kirigami.Units.longDuration * 1.5) : 380
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            Repeater {
+                id: pageRepeater
+                model: desktopInfo.desktopIds
+
+                delegate: WindowGrid {
+                    id: pageDelegate
+                    required property var modelData
+                    required property int index
+
+                    x: pageDelegate.index * carouselTrack.width
+                    y: 0
+                    width: carouselTrack.width
+                    height: carouselTrack.height
+
+                    desktopId: pageDelegate.modelData
+                    pageIndex: pageDelegate.index
+                    isCurrentPage: pageDelegate.index === carouselTrack.currentDesktopIndex
+                    lastActiveWinId: root.lastActiveWinId
+
+                    showCloseButtons: Plasmoid.configuration.showCloseButtons !== false
+                    cardRadius: root.cardRadius
+                    overviewOpen: root.isOverviewOpen
+                    layoutRefreshTick: carouselTrack.layoutRefreshTick
+
+                    onTaskActivated: root.dismissOverview()
+                    onTaskClosed: {
+                        carouselTrack.layoutRefreshTick++;
+                    }
+                    onEmptyAreaClicked: root.dismissOverview()
+
+                    onWindowDragStarted: (pageIdx, taskRow, winIds, title, iconSource, appName, cardW, cardH, ox, oy, gx, gy) => {
+                        dragOverlay.sourcePageIndex = pageIdx;
+                        dragOverlay.sourceTaskRow = taskRow;
+                        dragOverlay.sourceWinIds = winIds;
+                        dragOverlay.cardTitle = title;
+                        dragOverlay.cardIcon = iconSource;
+
+                        const targetScale = 0.50;
+                        dragOverlay.cardWidth = Math.max(100, Math.round(cardW * targetScale));
+                        dragOverlay.cardHeight = Math.max(70, Math.round(cardH * targetScale));
+
+                        dragOverlay.grabOffsetX = dragOverlay.cardWidth / 2;
+                        dragOverlay.grabOffsetY = dragOverlay.cardHeight / 2;
+
+                        dragOverlay.startGlobalX = ox + (cardW - dragOverlay.cardWidth) / 2;
+                        dragOverlay.startGlobalY = oy + (cardH - dragOverlay.cardHeight) / 2;
+
+                        dragOverlay.currentGlobalX = gx - dragOverlay.grabOffsetX;
+                        dragOverlay.currentGlobalY = gy - dragOverlay.grabOffsetY;
+
+                        dragOverlay.opacity = 1.0;
+                        dragOverlay.isDragging = true;
+                        snapBackAnim.stop();
+                    }
+                    onWindowDragMoved: (gx, gy) => {
+                        if (!dragOverlay.isDragging) return;
+                        dragOverlay.currentGlobalX = gx - dragOverlay.grabOffsetX;
+                        dragOverlay.currentGlobalY = gy - dragOverlay.grabOffsetY;
+
+                        const target = pager.getDesktopAt(gx, gy);
+                        pager.highlightedDesktopId = target ? target.desktopId : "";
+                    }
+                    onWindowDragEnded: (gx, gy) => {
+                        if (!dragOverlay.isDragging) return;
+
+                        const target = pager.getDesktopAt(gx, gy);
+                        pager.highlightedDesktopId = "";
+
+                        if (target && target.desktopId !== undefined) {
+                            root.requestTaskMoved(target.desktopId);
+                            carouselTrack.moveTaskToDesktop(dragOverlay.sourcePageIndex, dragOverlay.sourceTaskRow, target.desktopId);
+                            dragOverlay.isDragging = false;
+                            dragOverlay.opacity = 0;
+                        } else {
+                            snapBackAnim.restart();
+                        }
+                    }
+                    onWindowDragCanceled: {
+                        if (dragOverlay.isDragging) {
+                            snapBackAnim.restart();
+                        }
+                    }
+                }
             }
         }
     }
 
     // Search Results View (placed just under search bar, horizontally centered)
-    SearchResults {
+    Rectangle {
         id: searchResults
         anchors.top: topHeader.bottom
         anchors.topMargin: 8
@@ -328,12 +426,63 @@ FocusScope {
         width: Math.min(parent.width * 0.75, 750)
         height: Math.min(parent.height - topHeader.height - 40, 520)
         visible: searchBar.text.length > 0
-        query: searchBar.text
         z: 20
-        onItemActivated: {
-            Qt.callLater(() => {
-                root.dismissOverview();
-            });
+        radius: 16
+        color: Qt.rgba(0.12, 0.12, 0.14, 0.96)
+        clip: true
+
+        function activateCurrent() {
+            if (resultsView.currentIndex < 0 && resultsView.count > 0) {
+                resultsView.currentIndex = 0;
+            }
+            resultsView.runCurrentIndex();
+        }
+
+        function selectNext() {
+            if (resultsView.currentIndex < resultsView.count - 1) {
+                resultsView.currentIndex++;
+                resultsView.positionViewAtIndex(resultsView.currentIndex, ListView.Contain);
+            }
+        }
+
+        function selectPrevious() {
+            if (resultsView.currentIndex > 0) {
+                resultsView.currentIndex--;
+                resultsView.positionViewAtIndex(resultsView.currentIndex, ListView.Contain);
+            }
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 14
+            spacing: 10
+
+            QQC2.Label {
+                text: i18n("Search Results for \"%1\"", searchBar.text)
+                font.bold: true
+                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize + 1
+                color: Qt.rgba(1, 1, 1, 0.90)
+                elide: Text.ElideRight
+                Layout.fillWidth: true
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                height: 1
+                color: Qt.rgba(1, 1, 1, 0.08)
+            }
+
+            Milou.ResultsView {
+                id: resultsView
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                queryString: searchBar.text
+                onActivated: {
+                    Qt.callLater(() => {
+                        root.dismissOverview();
+                    });
+                }
+            }
         }
     }
 
@@ -354,7 +503,7 @@ FocusScope {
                 searchBar.text = "";
                 searchBar.searchField.focus = false;
                 root.forceActiveFocus();
-                windowGrid.updateDefaultSelection();
+                carouselTrack.updateDefaultSelection();
                 event.accepted = true;
             }
             return;
@@ -368,32 +517,32 @@ FocusScope {
         }
 
         if (event.key === Qt.Key_Left) {
-            windowGrid.navigateSelection(-1, 0);
+            carouselTrack.navigateSelection(-1, 0);
             event.accepted = true;
             return;
         }
         if (event.key === Qt.Key_Right) {
-            windowGrid.navigateSelection(1, 0);
+            carouselTrack.navigateSelection(1, 0);
             event.accepted = true;
             return;
         }
         if (event.key === Qt.Key_Up) {
-            const res = windowGrid.navigateSelection(0, -1);
+            const res = carouselTrack.navigateSelection(0, -1);
             if (res === "above_top") {
-                windowGrid.clearSelection();
+                carouselTrack.clearSelection();
                 searchBar.forceFocus();
             }
             event.accepted = true;
             return;
         }
         if (event.key === Qt.Key_Down) {
-            windowGrid.navigateSelection(0, 1);
+            carouselTrack.navigateSelection(0, 1);
             event.accepted = true;
             return;
         }
 
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
-            windowGrid.activateSelected();
+            carouselTrack.activateSelected();
             event.accepted = true;
             return;
         }
@@ -405,7 +554,7 @@ FocusScope {
 
         // Printable text typed anywhere routes to search box and selects it
         if (event.text && event.text.length > 0 && event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) {
-            windowGrid.clearSelection();
+            carouselTrack.clearSelection();
             searchBar.forceFocus();
             searchBar.text += event.text;
             event.accepted = true;
@@ -413,7 +562,7 @@ FocusScope {
         }
     }
 
-    // Floating drag card overlay styled identically to real WindowItem cards
+    // Floating drag card overlay styled identically to real WindowCard cards
     Item {
         id: dragOverlay
         z: 9999
@@ -436,21 +585,14 @@ FocusScope {
 
         readonly property string dragWinUuid: {
             if (!sourceWinIds) return "";
-            try {
-                if (Array.isArray(sourceWinIds) && sourceWinIds.length > 0) return String(sourceWinIds[0]);
-                if (typeof sourceWinIds === "string") return sourceWinIds;
-            } catch(e) {}
-            return "";
+            return Array.isArray(sourceWinIds) && sourceWinIds.length > 0 ? String(sourceWinIds[0]) : String(sourceWinIds);
         }
 
         readonly property int dragNumericWinId: {
             if (!sourceWinIds) return 0;
-            try {
-                if (typeof sourceWinIds === "number") return sourceWinIds;
-                if (Array.isArray(sourceWinIds) && sourceWinIds.length > 0) return Number(sourceWinIds[0]) || 0;
-                return Number(sourceWinIds) || 0;
-            } catch(e) {}
-            return 0;
+            const raw = Array.isArray(sourceWinIds) && sourceWinIds.length > 0 ? sourceWinIds[0] : sourceWinIds;
+            const n = Number(raw);
+            return (!isNaN(n) && n > 0) ? n : 0;
         }
 
         readonly property bool isWayland: {
@@ -496,7 +638,7 @@ FocusScope {
             }
         }
 
-        // Card Container - matches WindowItem styling, borders, shadow and header
+        // Card Container - matches WindowCard styling, borders, shadow and header
         Rectangle {
             anchors.fill: parent
             radius: Math.max(6, root.cardRadius - 2)
