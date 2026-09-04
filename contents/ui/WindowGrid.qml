@@ -521,14 +521,15 @@ Item {
             QQC2.Label {
                 text: i18n("No open windows")
                 font.pixelSize: Kirigami.Theme.defaultFont.pixelSize + 1
-                color: Qt.rgba(1, 1, 1, 0.5)
+                color: Kirigami.Theme.textColor
+                opacity: 0.75
                 Layout.alignment: Qt.AlignHCenter
             }
 
             QQC2.Label {
                 text: i18n("Start typing to search and launch apps")
                 font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                color: Qt.rgba(1, 1, 1, 0.35)
+                color: Kirigami.Theme.disabledTextColor
                 Layout.alignment: Qt.AlignHCenter
             }
         }

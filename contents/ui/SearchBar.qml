@@ -21,9 +21,9 @@ Rectangle {
     height: 44
     radius: 22
 
-    color: Qt.rgba(0.18, 0.18, 0.20, 0.88)
+    color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.90)
     border.width: searchInput.activeFocus ? 2 : 1
-    border.color: searchInput.activeFocus ? Kirigami.Theme.highlightColor : Qt.rgba(1, 1, 1, 0.22)
+    border.color: searchInput.activeFocus ? Kirigami.Theme.focusColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.20)
 
     Behavior on border.color { ColorAnimation { duration: 150 } }
 
@@ -53,7 +53,7 @@ Rectangle {
             source: "search"
             implicitWidth: 18
             implicitHeight: 18
-            color: searchInput.activeFocus ? Kirigami.Theme.highlightColor : Qt.rgba(1, 1, 1, 0.65)
+            color: searchInput.activeFocus ? Kirigami.Theme.highlightColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.60)
             Behavior on color { ColorAnimation { duration: 150 } }
         }
 
@@ -61,11 +61,12 @@ Rectangle {
             id: searchInput
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
-            color: "#ffffff"
+            color: Kirigami.Theme.textColor
             font.pixelSize: Kirigami.Theme.defaultFont.pixelSize + 1
             clip: true
             selectByMouse: true
             selectionColor: Kirigami.Theme.highlightColor
+            selectedTextColor: Kirigami.Theme.highlightedTextColor
             focus: false
             activeFocusOnTab: true
 
@@ -84,7 +85,7 @@ Rectangle {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 text: i18n("Type to search…")
-                color: Qt.rgba(1, 1, 1, 0.45)
+                color: Kirigami.Theme.disabledTextColor
                 font: searchInput.font
                 visible: !searchInput.text && !searchInput.inputMethodComposing
             }
@@ -124,7 +125,9 @@ Rectangle {
                 width: 20
                 height: 20
                 radius: 10
-                color: clearMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.25) : Qt.rgba(1, 1, 1, 0.12)
+                color: clearMouse.containsMouse
+                    ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.20)
+                    : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
 
                 Kirigami.Icon {
                     source: "edit-clear-symbolic"
@@ -134,7 +137,7 @@ Rectangle {
                     height: width
                     implicitWidth: width
                     implicitHeight: height
-                    color: "#ffffff"
+                    color: Kirigami.Theme.textColor
                     isMask: true
                 }
             }

@@ -451,7 +451,9 @@ FocusScope {
         visible: searchBar.text.length > 0
         z: 20
         radius: 16
-        color: Qt.rgba(0.12, 0.12, 0.14, 0.96)
+        color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.96)
+        border.width: 1
+        border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
         clip: true
 
         function activateCurrent() {
@@ -484,7 +486,7 @@ FocusScope {
                 text: i18n("Search Results for \"%1\"", searchBar.text)
                 font.bold: true
                 font.pixelSize: Kirigami.Theme.defaultFont.pixelSize + 1
-                color: Qt.rgba(1, 1, 1, 0.90)
+                color: Kirigami.Theme.textColor
                 elide: Text.ElideRight
                 Layout.fillWidth: true
             }
@@ -492,7 +494,7 @@ FocusScope {
             Rectangle {
                 Layout.fillWidth: true
                 height: 1
-                color: Qt.rgba(1, 1, 1, 0.08)
+                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.12)
             }
 
             Milou.ResultsView {
@@ -665,7 +667,7 @@ FocusScope {
         Rectangle {
             anchors.fill: parent
             radius: Math.max(6, root.cardRadius - 2)
-            color: Qt.rgba(0.24, 0.24, 0.28, 0.95)
+            color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.18))
             border.width: 2
             border.color: Kirigami.Theme.highlightColor
 
@@ -694,7 +696,7 @@ FocusScope {
                         text: dragOverlay.cardTitle || i18n("Window")
                         font.bold: true
                         font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                        color: "#ffffff"
+                        color: Kirigami.Theme.textColor
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignVCenter
@@ -706,9 +708,9 @@ FocusScope {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     radius: Math.max(4, root.cardRadius - 4)
-                    color: "#14151e"
+                    color: Kirigami.Theme.alternateBackgroundColor
                     border.width: 1
-                    border.color: Qt.rgba(1, 1, 1, 0.08)
+                    border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.10)
                     clip: true
 
                     // Center App Icon Placeholder

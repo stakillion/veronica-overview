@@ -71,9 +71,17 @@ Rectangle {
 
     readonly property bool isHovered: Boolean((mouseArea && mouseArea.containsMouse) || (closeMouse && closeMouse.containsMouse))
 
-    color: isActive ? Qt.rgba(0.24, 0.24, 0.28, 0.95) : (isHovered ? Qt.rgba(0.20, 0.20, 0.23, 0.92) : Qt.rgba(0.14, 0.14, 0.16, 0.88))
-    border.width: isActive ? 2 : 0
-    border.color: isActive ? Kirigami.Theme.highlightColor : "transparent"
+    color: isActive
+        ? Qt.tint(Kirigami.Theme.backgroundColor, Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.18))
+        : (isHovered
+            ? Qt.tint(Kirigami.Theme.backgroundColor, Qt.rgba(Kirigami.Theme.hoverColor.r, Kirigami.Theme.hoverColor.g, Kirigami.Theme.hoverColor.b, 0.20))
+            : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.90))
+    border.width: isActive ? 2 : 1
+    border.color: isActive
+        ? Kirigami.Theme.highlightColor
+        : (isHovered
+            ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.50)
+            : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15))
 
     scale: isHovered ? 1.025 : 1.0
     Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
@@ -108,7 +116,7 @@ Rectangle {
                 text: root.cardTitle
                 font.bold: true
                 font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                color: "#ffffff"
+                color: Kirigami.Theme.textColor
                 elide: Text.ElideRight
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
@@ -121,9 +129,9 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: Math.max(4, root.itemRadius - 4)
-            color: "#14151e"
+            color: Kirigami.Theme.alternateBackgroundColor
             border.width: 1
-            border.color: Qt.rgba(1, 1, 1, 0.08)
+            border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.10)
 
             // 1. High-resolution application icon (Underneath, visible while loading or if minimized)
             Item {
@@ -135,7 +143,7 @@ Rectangle {
                     width: centerIcon.width + 24
                     height: centerIcon.height + 24
                     radius: width / 2
-                    color: Qt.rgba(1, 1, 1, 0.05)
+                    color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.05)
                 }
 
                 Kirigami.Icon {
@@ -257,9 +265,11 @@ Rectangle {
         width: root.isCompact ? 18 : 22
         height: root.isCompact ? 18 : 22
         radius: width / 2
-        color: closeMouse.containsMouse ? "#e01b24" : Qt.rgba(0.15, 0.15, 0.18, 0.85)
+        color: closeMouse.containsMouse
+            ? (Kirigami.Theme.negativeTextColor ? Kirigami.Theme.negativeTextColor : "#e01b24")
+            : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.85)
         border.width: 1
-        border.color: Qt.rgba(1, 1, 1, 0.25)
+        border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.20)
         Behavior on color { ColorAnimation { duration: 120 } }
 
         Kirigami.Icon {
@@ -267,7 +277,7 @@ Rectangle {
             source: "window-close-symbolic"
             implicitWidth: 12
             implicitHeight: 12
-            color: "#ffffff"
+            color: closeMouse.containsMouse ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
         }
 
         MouseArea {

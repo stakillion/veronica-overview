@@ -150,14 +150,18 @@ Item {
                     ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.40)
                     : (isCurrent
                         ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.22)
-                        : (cardMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(0, 0, 0, 0.45)))
+                        : (cardMouse.containsMouse
+                            ? Qt.tint(Kirigami.Theme.backgroundColor, Qt.rgba(Kirigami.Theme.hoverColor.r, Kirigami.Theme.hoverColor.g, Kirigami.Theme.hoverColor.b, 0.25))
+                            : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.65)))
 
                 border.width: isHighlighted ? 2 : (isCurrent ? 2 : 1)
                 border.color: isHighlighted
                     ? Kirigami.Theme.highlightColor
                     : (isCurrent
                         ? Kirigami.Theme.highlightColor
-                        : (cardMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.25) : Qt.rgba(1, 1, 1, 0.10)))
+                        : (cardMouse.containsMouse
+                            ? Qt.rgba(Kirigami.Theme.hoverColor.r, Kirigami.Theme.hoverColor.g, Kirigami.Theme.hoverColor.b, 0.50)
+                            : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)))
 
                 Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                 Behavior on color { ColorAnimation { duration: 150 } }
@@ -206,11 +210,13 @@ Item {
                         height: root.previewHeight
                         radius: 5
                         clip: true
-                        color: desktopCard.isCurrent ? Qt.rgba(0.08, 0.11, 0.18, 0.95) : Qt.rgba(0.05, 0.06, 0.09, 0.95)
+                        color: desktopCard.isCurrent
+                            ? Qt.tint(Kirigami.Theme.alternateBackgroundColor, Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.14))
+                            : Kirigami.Theme.alternateBackgroundColor
                         border.width: 1
                         border.color: desktopCard.isCurrent
-                            ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.35)
-                            : Qt.rgba(1, 1, 1, 0.08)
+                            ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.40)
+                            : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.12)
 
                         // Scaled miniature window rectangles matching KDE Plasma Pager
                         Item {
@@ -266,13 +272,13 @@ Item {
 
                                     // Active window vs standard window fill matching Plasma Pager
                                     color: isWinActive
-                                        ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.80)
-                                        : Qt.rgba(0.24, 0.26, 0.32, 0.88)
+                                        ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.85)
+                                        : Qt.tint(Kirigami.Theme.backgroundColor, Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15))
 
                                     border.width: isWinActive ? 1.5 : 1
                                     border.color: isWinActive
                                         ? Kirigami.Theme.highlightColor
-                                        : Qt.rgba(1, 1, 1, 0.22)
+                                        : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.25)
 
                                     // Centered miniature application icon
                                     Kirigami.Icon {
