@@ -6,12 +6,12 @@ A GNOME-style desktop overview widget for KDE Plasma 6 that keeps your desktop p
 
 ## Features
 
-- **Visible & Interactive Panels**: Panels, docks, system trays, and applets remain fully accessible and interactive while in the overview.
-- **Dynamic Window Grid**: Window cards with live PipeWire previews dynamically scaled to match actual window aspect ratios with tight, centered row layouts.
-- **Drag-and-Drop to Workspaces**: Drag window cards directly onto the workspace pager bar to move windows between virtual desktops, featuring smooth snap-back animation on invalid drops.
-- **Type-Anywhere Search**: Instant application and file search powered by KRunner/Milou. Simply start typing while the overview is open.
-- **Virtual Desktop Pager**: Screen-proportional workspace strip at the top. Scroll anywhere to switch desktops or click the active desktop to close the overview.
-- **Customizable Panel Button**: Configurable icon, custom label, font family, and font size.
+- **Fully Available & Interactive Panels**: Desktop panels, docks, application launchers, and system tray applets remain on top, completely visible, and interactive while the overview is open.
+- **Virtual Desktop Switching & Management**: Smooth multi-page workspace carousel with fluid slide animations, mouse-wheel scrolling, PageUp/PageDown switching, and an integrated desktop pager supporting drag-and-drop window organization.
+- **Window Cards with Previews**: High-fidelity window preview cards featuring live PipeWire screencasts dynamically scaled to match the window's exact aspect ratio with zero letterboxing.
+- **KRunner-Based Search**: Instant type-anywhere search for applications, documents, calculator expressions, and system actions powered by KRunner and Milou.
+- **Keyboard Navigation**: Complete keyboard-driven workflow with directional arrow key navigation between window cards, instant type-to-search handoff, Enter/Space to activate, and Escape to dismiss.
+- **Native Context Menus**: Full right-click context menu parity with KDE Plasma's Task Manager (Move to Desktop, Show in Activities, Minimize, Maximize, Fullscreen, Close) and pager actions (Add, Remove, and Configure Virtual Desktops).
 
 ---
 
