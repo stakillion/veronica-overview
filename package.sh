@@ -13,7 +13,7 @@ echo "==> Packaging Veronica Overview into ${OUTPUT_FILE}..."
 rm -f "${OUTPUT_FILE}"
 
 # Create zip archive of the plasmoid contents
-zip -r "${OUTPUT_FILE}" contents/ metadata.json LICENSE.md README.md
+zip -r "${OUTPUT_FILE}" contents/ metadata.json LICENSE.md README.md preview.png
 
 echo ""
 echo "==> Successfully packaged! Created: ${OUTPUT_FILE}"

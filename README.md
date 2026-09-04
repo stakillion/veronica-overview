@@ -2,6 +2,8 @@
 
 A GNOME-style desktop overview widget for KDE Plasma 6 that keeps your desktop panels completely visible, clickable, and interactive.
 
+![Veronica Overview](preview.png)
+
 ---
 
 ## Features
