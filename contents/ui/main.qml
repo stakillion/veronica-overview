@@ -116,8 +116,8 @@ PlasmoidItem {
                     return;
                 }
 
-                // Regular unminimized application window was focused
-                root.closeOverview();
+                // Regular unminimized application window was focused (e.g. from taskbar)
+                root.closeImmediately();
             }
         }
     }
@@ -127,7 +127,18 @@ PlasmoidItem {
         return url.replace(/^file:\/\//, "");
     }
 
+    property bool kwinScriptLoaded: false
+
     function ensureKWinScriptLoaded() {
+        if (root.kwinScriptLoaded) return;
+        root.kwinScriptLoaded = true;
+        DBus.SessionBus.asyncCall({
+            service: "org.kde.KWin",
+            path: "/Scripting",
+            iface: "org.kde.kwin.Scripting",
+            member: "unloadScript",
+            arguments: [root.kwinScriptPath]
+        });
         DBus.SessionBus.asyncCall({
             service: "org.kde.KWin",
             path: "/Scripting",
@@ -160,6 +171,8 @@ PlasmoidItem {
         root.ensureKWinScriptLoaded();
         root.ignoreWindowMoveActivation = false;
         root.lastSwitchedDesktop = null;
+        root.pendingWindowActivation = null;
+        closeTimer.stop();
         if (globalFocusMonitor.activeTask && globalFocusMonitor.activeTask.valid) {
             const winIds = globalFocusMonitor.data(globalFocusMonitor.activeTask, TaskManager.AbstractTasksModel.WinIdList);
             if (winIds && winIds.length > 0) {
@@ -168,16 +181,13 @@ PlasmoidItem {
         }
 
         isOverviewOpen = true;
-        overviewOverlay.opacity = 0;
-        overviewDialog.opacity = 0;
         
         if (overviewOverlay) {
             overviewOverlay.openOverview();
         }
 
+        overviewDialog.title = "Veronica Overview:open:" + root.fadeDuration;
         overviewDialog.visible = true;
-
-        fadeInAnim.restart();
 
         // Save original hiding mode ONLY if not already in temporary state, then set dodge-windows panels to 'windowsgobelow'
         DBus.SessionBus.asyncCall({
@@ -189,11 +199,22 @@ PlasmoidItem {
         });
     }
 
+    property var pendingWindowActivation: null
+
+    function closeImmediately(callback) {
+        if (!isOverviewOpen) return;
+
+        closeTimer.stop();
+        overviewDialog.title = "Veronica Overview:instant-close";
+        root.pendingWindowActivation = callback || null;
+        root.finalizeClose();
+    }
+
     function closeOverview() {
         if (!isOverviewOpen) return;
 
-        fadeInAnim.stop();
-        fadeOutAnim.restart();
+        overviewDialog.title = "Veronica Overview:close:" + root.fadeDuration;
+        closeTimer.restart();
     }
 
     function grabOverviewFocus() {
@@ -208,6 +229,7 @@ PlasmoidItem {
     function finalizeClose() {
         isOverviewOpen = false;
         overviewDialog.visible = false;
+        overviewDialog.title = "Veronica Overview";
 
         // Restore panels back to their original hiding mode and clear temporary config key
         DBus.SessionBus.asyncCall({
@@ -217,51 +239,25 @@ PlasmoidItem {
             member: "evaluateScript",
             arguments: ["var pans = panels(); for (var i = 0; i < pans.length; i++) { pans[i].currentConfigGroup = ['General']; var orig = pans[i].readConfig('OriginalHiding'); if (orig && orig === 'dodgewindows') { pans[i].hiding = 'dodgewindows'; pans[i].writeConfig('OriginalHiding', ''); } }"]
         });
+
+        if (root.pendingWindowActivation) {
+            const activateFn = root.pendingWindowActivation;
+            root.pendingWindowActivation = null;
+            activateFn();
+        }
     }
 
     Plasmoid.onActivated: {
         root.toggleOverview();
     }
 
-    ParallelAnimation {
-        id: fadeInAnim
-        NumberAnimation {
-            target: overviewDialog
-            property: "opacity"
-            from: overviewDialog.opacity
-            to: 1
-            duration: Kirigami.Units.shortDuration
-            easing.type: Easing.OutCubic
-        }
-        NumberAnimation {
-            target: overviewOverlay
-            property: "opacity"
-            from: overviewOverlay.opacity
-            to: 1
-            duration: Kirigami.Units.shortDuration
-            easing.type: Easing.OutCubic
-        }
-    }
+    readonly property int fadeDuration: Kirigami.Units.longDuration
 
-    ParallelAnimation {
-        id: fadeOutAnim
-        NumberAnimation {
-            target: overviewDialog
-            property: "opacity"
-            from: overviewDialog.opacity
-            to: 0
-            duration: Kirigami.Units.shortDuration
-            easing.type: Easing.InCubic
-        }
-        NumberAnimation {
-            target: overviewOverlay
-            property: "opacity"
-            from: overviewOverlay.opacity
-            to: 0
-            duration: Kirigami.Units.shortDuration
-            easing.type: Easing.InCubic
-        }
-        onFinished: {
+    Timer {
+        id: closeTimer
+        interval: root.fadeDuration
+        repeat: false
+        onTriggered: {
             root.finalizeClose();
         }
     }
@@ -330,7 +326,6 @@ PlasmoidItem {
             height: overviewDialog.lockedHeight
             isOverviewOpen: root.isOverviewOpen
             lastActiveWinId: root.lastActiveWinId
-            opacity: 0
 
             onRequestDesktopSwitch: desktopId => root.recordDesktopSwitch(desktopId)
             onRequestTaskMoved: targetDesktopId => {
@@ -338,6 +333,9 @@ PlasmoidItem {
             }
             onRequestClose: {
                 root.closeOverview();
+            }
+            onRequestCloseImmediately: callback => {
+                root.closeImmediately(callback);
             }
         }
     }

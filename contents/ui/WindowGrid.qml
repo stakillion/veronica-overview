@@ -21,7 +21,7 @@ Item {
     property int layoutRefreshTick: 0
     property var lastActiveWinId: null
 
-    signal taskActivated()
+    signal taskActivated(var activationCallback)
     signal taskClosed()
     signal emptyAreaClicked()
     signal windowDragStarted(int pageIndex, int taskRow, var winIds, string title, var icon, string appName, real cardW, real cardH, real aspect, real globalOriginX, real globalOriginY, real grabX, real grabY)
@@ -42,9 +42,17 @@ Item {
 
     function activateTask(taskRow) {
         if (taskRow >= 0 && taskRow < pageTasksModel.count) {
-            pageTasksModel.requestActivate(pageTasksModel.makeModelIndex(taskRow));
+            const targetIndex = pageTasksModel.makeModelIndex(taskRow);
+            pageRoot.taskActivated(() => {
+                if (targetIndex && targetIndex.valid) {
+                    pageTasksModel.requestActivate(targetIndex);
+                } else if (taskRow >= 0 && taskRow < pageTasksModel.count) {
+                    pageTasksModel.requestActivate(pageTasksModel.makeModelIndex(taskRow));
+                }
+            });
+        } else {
+            pageRoot.taskActivated(null);
         }
-        pageRoot.taskActivated();
     }
 
     function closeTask(taskRow) {

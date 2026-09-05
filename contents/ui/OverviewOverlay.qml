@@ -21,6 +21,7 @@ FocusScope {
     property int cardRadius: Plasmoid.configuration.cardBorderRadius !== undefined ? Plasmoid.configuration.cardBorderRadius : 14
 
     signal requestClose()
+    signal requestCloseImmediately(var activationCallback)
     signal requestDesktopSwitch(var desktopId)
     signal requestTaskMoved(var targetDesktopId)
 
@@ -356,7 +357,10 @@ FocusScope {
                     overviewOpen: root.isOverviewOpen
                     layoutRefreshTick: carouselTrack.layoutRefreshTick
 
-                    onTaskActivated: root.dismissOverview()
+                    onTaskActivated: activationCallback => {
+                        if (searchBar) searchBar.text = "";
+                        root.requestCloseImmediately(activationCallback);
+                    }
                     onTaskClosed: {
                         carouselTrack.layoutRefreshTick++;
                     }
@@ -506,7 +510,8 @@ FocusScope {
                 queryString: searchBar.text
                 onActivated: {
                     Qt.callLater(() => {
-                        root.dismissOverview();
+                        if (searchBar) searchBar.text = "";
+                        root.requestCloseImmediately();
                     });
                 }
             }
