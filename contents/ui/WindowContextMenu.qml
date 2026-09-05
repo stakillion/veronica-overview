@@ -8,8 +8,11 @@ Item {
 
     property bool canLaunchNewInstance: false
     property bool isOnAllDesktops: false
+    property bool isVirtualDesktopsChangeable: true
     property var virtualDesktops: []
     property var activities: []
+    property int desktopCount: 0
+    property var desktopIds: []
     property bool isMovable: false
     property bool isResizable: false
     property bool isMaximizable: true
@@ -59,14 +62,58 @@ Item {
         return Qt.createQmlObject('import org.kde.plasma.extras as PlasmaExtras; PlasmaExtras.MenuItem { separator: true }', parentObj);
     }
 
+    function prepareMenu() {
+        // Query desktops count
+        const ids = (desktopInfo.desktopIds && desktopInfo.desktopIds.length > 0)
+            ? desktopInfo.desktopIds
+            : (wrapper.desktopIds || []);
+        const names = (desktopInfo.desktopNames && desktopInfo.desktopNames.length > 0)
+            ? desktopInfo.desktopNames
+            : [];
+        const numDesktops = Math.max(
+            desktopInfo.numberOfDesktops || 0,
+            ids.length,
+            names.length,
+            wrapper.desktopCount || 0
+        );
+
+        // Decide whether to display "Move to Desktop"
+        const canMoveDesktops = wrapper.isVirtualDesktopsChangeable && numDesktops > 1;
+        virtualDesktopsMenuItem.visible = canMoveDesktops;
+
+        // Query activities count
+        const running = (activityInfo.runningActivities ? activityInfo.runningActivities() : []) || [];
+        const numActivities = Math.max(
+            activityInfo.numberOfRunningActivities || 0,
+            running.length
+        );
+
+        // Decide whether to display "Show in Activities"
+        const canShowActivities = numActivities > 1;
+        activitiesMenuItem.visible = canShowActivities;
+
+        desktopsActivitiesSeparator.visible = canMoveDesktops || canShowActivities;
+
+        // Immediately populate or clear submenus
+        if (canMoveDesktops) {
+            virtualDesktopsMenuItem._virtualDesktopsMenu.refresh(ids, names);
+        } else {
+            virtualDesktopsMenuItem._virtualDesktopsMenu.clearMenuItems();
+        }
+
+        if (canShowActivities) {
+            activitiesMenuItem._activitiesMenu.refresh(running);
+        } else {
+            activitiesMenuItem._activitiesMenu.clearMenuItems();
+        }
+    }
+
     function popup(visualParentItem, x, y) {
         menu.visualParent = visualParentItem;
-        if (virtualDesktopsMenuItem.visible) {
-            virtualDesktopsMenuItem._virtualDesktopsMenu.refresh();
-        }
-        if (activitiesMenuItem.visible) {
-            activitiesMenuItem._activitiesMenu.refresh();
-        }
+
+        // The moment before the context menu appears: decide whether to show submenus
+        wrapper.prepareMenu();
+
         if (x !== undefined && y !== undefined) {
             menu.open(Math.round(x), Math.round(y));
         } else {
@@ -118,7 +165,7 @@ Item {
                 visualParent: virtualDesktopsMenuItem.action
                 minimumWidth: Kirigami.Units.gridUnit * 12
 
-                function refresh() {
+                function refresh(desks, deskNames) {
                     clearMenuItems();
                     if (!virtualDesktopsMenuItem.visible) return;
 
@@ -148,11 +195,11 @@ Item {
                     virtualDesktopsMenu.addMenuItem(wrapper.newSeparator(virtualDesktopsMenu));
 
                     // Individual Desktops
-                    const ids = desktopInfo.desktopIds || [];
-                    const names = desktopInfo.desktopNames || [];
+                    const ids = (desks && desks.length > 0) ? desks : (desktopInfo.desktopIds || []);
+                    const names = (deskNames && deskNames.length > 0) ? deskNames : (desktopInfo.desktopNames || []);
                     for (let i = 0; i < ids.length; ++i) {
                         const deskId = ids[i];
-                        const deskName = names[i] || i18n("Desktop %1", i + 1);
+                        const deskName = (names && names[i]) || i18n("Desktop %1", i + 1);
                         item = wrapper.newMenuItem(virtualDesktopsMenu);
                         item.text = deskName;
                         item.checkable = true;
@@ -189,7 +236,7 @@ Item {
                 visualParent: activitiesMenuItem.action
                 minimumWidth: Kirigami.Units.gridUnit * 12
 
-                function refresh() {
+                function refresh(runningParam) {
                     clearMenuItems();
                     if (!activitiesMenuItem.visible) return;
 
@@ -224,7 +271,9 @@ Item {
                     activitiesMenu.addMenuItem(wrapper.newSeparator(activitiesMenu));
 
                     // Running Activities
-                    const running = activityInfo.runningActivities() || [];
+                    const running = (runningParam && runningParam.length > 0)
+                        ? runningParam
+                        : ((activityInfo.runningActivities ? activityInfo.runningActivities() : []) || []);
                     for (let i = 0; i < running.length; ++i) {
                         const actId = running[i];
                         item = wrapper.newMenuItem(activitiesMenu);
@@ -250,6 +299,7 @@ Item {
         }
 
         PlasmaExtras.MenuItem {
+            id: desktopsActivitiesSeparator
             separator: true
             visible: virtualDesktopsMenuItem.visible || activitiesMenuItem.visible
         }

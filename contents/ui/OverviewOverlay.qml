@@ -347,6 +347,8 @@ FocusScope {
                     desktopId: pageDelegate.modelData
                     pageIndex: pageDelegate.index
                     isCurrentPage: pageDelegate.index === carouselTrack.currentDesktopIndex
+                    desktopCount: Math.max(1, desktopInfo.numberOfDesktops || (desktopInfo.desktopIds ? desktopInfo.desktopIds.length : 1))
+                    desktopIds: desktopInfo.desktopIds
                     lastActiveWinId: root.lastActiveWinId
 
                     showCloseButtons: Plasmoid.configuration.showCloseButtons !== false

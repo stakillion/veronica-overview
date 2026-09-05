@@ -11,6 +11,9 @@ Item {
     required property int pageIndex
     required property bool isCurrentPage
 
+    property int desktopCount: 1
+    property var desktopIds: []
+
     property bool showCloseButtons: true
     property int cardRadius: 14
     property bool overviewOpen: false
@@ -323,6 +326,7 @@ Item {
                 readonly property bool itemIsFullScreen: Boolean(model.IsFullScreen)
                 readonly property bool itemIsShaded: Boolean(model.IsShaded)
                 readonly property bool itemIsOnAllDesktops: Boolean(model.IsOnAllVirtualDesktops)
+                readonly property bool itemIsVirtualDesktopsChangeable: model.IsVirtualDesktopsChangeable !== undefined ? Boolean(model.IsVirtualDesktopsChangeable) : true
                 readonly property bool itemCanLaunchNewInstance: Boolean(model.CanLaunchNewInstance)
                 readonly property bool itemIsClosable: model.IsClosable !== undefined ? Boolean(model.IsClosable) : true
                 readonly property bool itemIsMovable: Boolean(model.IsMovable)
@@ -472,8 +476,11 @@ Item {
         pageRoot.contextMenuTaskIndex = cell.index;
         windowContextMenu.canLaunchNewInstance = cell.itemCanLaunchNewInstance;
         windowContextMenu.isOnAllDesktops = cell.itemIsOnAllDesktops;
+        windowContextMenu.isVirtualDesktopsChangeable = cell.itemIsVirtualDesktopsChangeable;
         windowContextMenu.virtualDesktops = cell.itemVirtualDesktops;
         windowContextMenu.activities = cell.itemActivities;
+        windowContextMenu.desktopCount = pageRoot.desktopCount;
+        windowContextMenu.desktopIds = pageRoot.desktopIds;
         windowContextMenu.isMovable = cell.itemIsMovable;
         windowContextMenu.isResizable = cell.itemIsResizable;
         windowContextMenu.isMaximizable = cell.itemIsMaximizable;
