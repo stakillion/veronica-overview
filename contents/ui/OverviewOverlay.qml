@@ -166,7 +166,15 @@ FocusScope {
         z: -1
     }
 
+    property int panelMarginTop: 0
+    property int panelMarginBottom: 0
+    property int panelMarginLeft: 0
+    property int panelMarginRight: 0
+
     readonly property real topPanelMargin: {
+        if (root.panelMarginTop > 0) {
+            return root.panelMarginTop + Kirigami.Units.largeSpacing;
+        }
         if (Plasmoid.location === PlasmaCore.Types.TopEdge) {
             return 56;
         }
@@ -180,9 +188,8 @@ FocusScope {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.topMargin: root.topPanelMargin
-        anchors.leftMargin: Kirigami.Units.largeSpacing
-        anchors.rightMargin: Kirigami.Units.largeSpacing
-        anchors.bottomMargin: Kirigami.Units.largeSpacing
+        anchors.leftMargin: root.panelMarginLeft + Kirigami.Units.largeSpacing
+        anchors.rightMargin: root.panelMarginRight + Kirigami.Units.largeSpacing
         spacing: Kirigami.Units.mediumSpacing
         z: 10
 
@@ -245,8 +252,10 @@ FocusScope {
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.topMargin: Kirigami.Units.largeSpacing
-        anchors.bottomMargin: (Plasmoid.configuration.hasBottomPanel) ? 56 : Kirigami.Units.largeSpacing
+        anchors.topMargin: 0
+        anchors.bottomMargin: root.panelMarginBottom
+        anchors.leftMargin: root.panelMarginLeft
+        anchors.rightMargin: root.panelMarginRight
         visible: searchBar.text.length === 0
         clip: true
         z: 1
@@ -458,7 +467,7 @@ FocusScope {
         anchors.topMargin: 8
         anchors.horizontalCenter: parent.horizontalCenter
         width: Math.min(parent.width * 0.75, 750)
-        height: Math.min(parent.height - topHeader.height - 40, 520)
+        height: Math.min(parent.height - topHeader.height - 40 - root.panelMarginBottom, 520)
         visible: searchBar.text.length > 0
         z: 20
         radius: 16

@@ -24,7 +24,6 @@ Kirigami.FormLayout {
     property alias cfg_showCloseButtons: showCloseButtonsCheckBox.checked
     property alias cfg_showAudioIndicator: showAudioIndicatorCheckBox.checked
     property alias cfg_showCardMediaControls: showCardMediaControlsCheckBox.checked
-    property alias cfg_hasBottomPanel: hasBottomPanelCheckBox.checked
 
     Kirigami.Separator {
         Kirigami.FormData.isSection: true
@@ -200,11 +199,5 @@ Kirigami.FormLayout {
     QQC2.CheckBox {
         id: showCardMediaControlsCheckBox
         text: i18n("Display media playback controls on window cards")
-    }
-
-    QQC2.CheckBox {
-        id: hasBottomPanelCheckBox
-        Kirigami.FormData.label: i18n("Layout:")
-        text: i18n("Add bottom margin for bottom panel")
     }
 }

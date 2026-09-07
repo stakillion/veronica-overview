@@ -189,19 +189,19 @@ Item {
 
     readonly property int rowCount: Math.max(1, Math.ceil(windowCount / cols))
 
-    readonly property real availW: Math.max(100, pageRoot.width - (spacing * (cols + 1)) - 32)
-    readonly property real availH: Math.max(100, pageRoot.height - (spacing * (rowCount + 1)) - 24)
+    readonly property real availW: Math.max(100, pageRoot.width - (pageRoot.spacing * (cols - 1)) - 32)
+    readonly property real availH: Math.max(100, pageRoot.height - (pageRoot.spacing * (rowCount - 1)) - 32)
 
     // Slot bounds fill the entire available grid space across all columns and rows
     readonly property real slotWidth: {
-        const base = (availW - (spacing * (cols - 1))) / cols;
+        const base = availW / cols;
         if (windowCount === 1) return Math.min(base, pageRoot.width * 0.70);
         return base;
     }
 
     readonly property real slotHeight: {
-        const base = (availH - (spacing * (rowCount - 1))) / rowCount;
-        if (windowCount === 1) return Math.min(base, pageRoot.height * 0.75);
+        const base = availH / rowCount;
+        if (windowCount === 1) return Math.min(base, pageRoot.height * 0.80);
         return base;
     }
 
@@ -232,6 +232,65 @@ Item {
             }
         } catch (e) {}
         return null;
+    }
+
+    function getAspectAtIndex(i) {
+        if (cardsRepeater && i >= 0 && i < cardsRepeater.count) {
+            const it = cardsRepeater.itemAt(i);
+            if (it && it.effectiveAspect > 0) return it.effectiveAspect;
+        }
+        if (pageTasksModel && i >= 0 && i < pageTasksModel.count) {
+            const idx = pageTasksModel.makeModelIndex(i);
+            const geom = pageTasksModel.data(idx, TaskManager.AbstractTasksModel.Geometry);
+            const s = pageRoot.extractSize(geom);
+            if (s && s.height > 0) return s.width / s.height;
+        }
+        return (Screen.width > 0 && Screen.height > 0) ? (Screen.width / Screen.height) : 1.6;
+    }
+
+    function getCardWidthForHeightAndAspect(cardH, aspect) {
+        const a = (aspect > 0) ? aspect : ((Screen.width > 0 && Screen.height > 0) ? (Screen.width / Screen.height) : 1.6);
+        const maxPH = Math.max(16, cardH - pageRoot.nonPreviewH);
+        const pW = Math.round(maxPH * a);
+        return Math.max(24, Math.round(pW + pageRoot.nonPreviewW));
+    }
+
+    function getRowHeight(rIndex) {
+        const _tick = pageRoot.layoutRefreshTick;
+        const startIdx = rIndex * pageRoot.cols;
+        const endIdx = Math.min(pageRoot.windowCount, (rIndex + 1) * pageRoot.cols);
+        if (startIdx >= endIdx) return pageRoot.slotHeight;
+
+        let minH = pageRoot.slotHeight;
+        for (let i = startIdx; i < endIdx; i++) {
+            const asp = pageRoot.getAspectAtIndex(i);
+            const h = pageRoot.getCardHeightForAspect(asp);
+            if (h < minH) {
+                minH = h;
+            }
+        }
+        return minH;
+    }
+
+    readonly property real actualGridHeight: {
+        const _tick = pageRoot.layoutRefreshTick;
+        if (pageRoot.windowCount <= 0) return 0;
+        let totalH = 0;
+        for (let r = 0; r < pageRoot.rowCount; r++) {
+            totalH += pageRoot.getRowHeight(r);
+        }
+        totalH += Math.max(0, pageRoot.rowCount - 1) * pageRoot.spacing;
+        return totalH;
+    }
+
+    readonly property real gridStartY: Math.max(16, (pageRoot.height - actualGridHeight) / 2)
+
+    function getRowY(rIndex) {
+        let y = pageRoot.gridStartY;
+        for (let r = 0; r < rIndex; r++) {
+            y += pageRoot.getRowHeight(r) + pageRoot.spacing;
+        }
+        return y;
     }
 
     function getCardWidthForAspect(aspect) {
@@ -267,7 +326,10 @@ Item {
             const it = cardsRepeater.itemAt(i);
             if (it && it.cardW > 0) return it.cardW;
         }
-        return pageRoot.slotWidth;
+        const rIdx = Math.floor(i / pageRoot.cols);
+        const rowH = pageRoot.getRowHeight(rIdx);
+        const asp = pageRoot.getAspectAtIndex(i);
+        return pageRoot.getCardWidthForHeightAndAspect(rowH, asp);
     }
 
     function getRowMetrics(rIndex) {
@@ -313,8 +375,8 @@ Item {
         anchors.fill: parent
         visible: pageRoot.windowCount > 0
 
-        readonly property real totalGridHeight: (pageRoot.rowCount * pageRoot.slotHeight) + ((pageRoot.rowCount - 1) * pageRoot.spacing)
-        readonly property real gridStartY: Math.max(0, (pageRoot.height - totalGridHeight) / 2)
+        readonly property real totalGridHeight: pageRoot.actualGridHeight
+        readonly property real gridStartY: pageRoot.gridStartY
 
         Repeater {
             id: cardsRepeater
@@ -427,6 +489,9 @@ Item {
 
                 visible: !isSelf
 
+                readonly property int rowIndex: Math.floor(cellItem.index / pageRoot.cols)
+                readonly property int colIndex: cellItem.index % pageRoot.cols
+
                 readonly property real effectiveAspect: {
                     if (customAspect > 0) return customAspect;
                     const s = pageRoot.extractSize(cellItem.itemGeom);
@@ -434,11 +499,12 @@ Item {
                     return (Screen.width > 0 && Screen.height > 0) ? (Screen.width / Screen.height) : 1.6;
                 }
 
-                readonly property real cardW: pageRoot.getCardWidthForAspect(effectiveAspect)
-                readonly property real cardH: pageRoot.getCardHeightForAspect(effectiveAspect)
+                onEffectiveAspectChanged: pageRoot.layoutRefreshTick++
 
-                onCardWChanged: {
-                    pageRoot.layoutRefreshTick++;
+                readonly property real cardH: pageRoot.getRowHeight(rowIndex)
+                readonly property real cardW: pageRoot.getCardWidthForHeightAndAspect(cardH, effectiveAspect)
+
+                function publishGeometry() {
                     if (pageRoot.overviewOpen && pageRoot.isCurrentPage && cardW > 0 && cardH > 0) {
                         const mIdx = pageTasksModel.makeModelIndex(cellItem.index);
                         if (mIdx.valid) {
@@ -448,12 +514,13 @@ Item {
                     }
                 }
 
-                readonly property int rowIndex: Math.floor(cellItem.index / pageRoot.cols)
-                readonly property int colIndex: cellItem.index % pageRoot.cols
+                onCardWChanged: publishGeometry()
+                onCardHChanged: publishGeometry()
+
                 readonly property var rowMetrics: pageRoot.getRowMetrics(rowIndex)
 
                 x: (rowMetrics && Array.isArray(rowMetrics.offsets) && colIndex < rowMetrics.offsets.length && rowMetrics.offsets[colIndex] !== undefined) ? rowMetrics.offsets[colIndex] : Math.max(16, (pageRoot.width - cardW) / 2)
-                y: cardsContainer.gridStartY + (rowIndex * (pageRoot.slotHeight + pageRoot.spacing)) + (pageRoot.slotHeight - cardH) / 2
+                y: pageRoot.getRowY(rowIndex)
                 width: cardW
                 height: cardH
 

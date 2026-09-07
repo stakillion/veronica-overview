@@ -155,8 +155,56 @@ PlasmoidItem {
         });
     }
 
+    property int dynamicPanelTop: (Plasmoid.location === PlasmaCore.Types.TopEdge) ? 40 : 0
+    property int dynamicPanelBottom: (Plasmoid.location === PlasmaCore.Types.BottomEdge) ? 48 : 0
+    property int dynamicPanelLeft: (Plasmoid.location === PlasmaCore.Types.LeftEdge) ? 48 : 0
+    property int dynamicPanelRight: (Plasmoid.location === PlasmaCore.Types.RightEdge) ? 48 : 0
+
+    function updatePanelMargins() {
+        const script = "var pans = panels(); var top = 0, bottom = 0, left = 0, right = 0; " +
+            "for (var i = 0; i < pans.length; i++) { " +
+            "  var p = pans[i]; " +
+            "  var hMode = p.readConfig('OriginalHiding') || p.hiding; " +
+            "  if (hMode === 'autohide') continue; " +
+            "  var thickness = p.height || 0; " +
+            "  if (p.floating) thickness += 16; " +
+            "  if (p.location === 'top') top = Math.max(top, thickness); " +
+            "  else if (p.location === 'bottom') bottom = Math.max(bottom, thickness); " +
+            "  else if (p.location === 'left') left = Math.max(left, thickness); " +
+            "  else if (p.location === 'right') right = Math.max(right, thickness); " +
+            "} " +
+            "print(JSON.stringify({top: top, bottom: bottom, left: left, right: right}));";
+
+        DBus.SessionBus.asyncCall({
+            service: "org.kde.plasmashell",
+            path: "/PlasmaShell",
+            iface: "org.kde.PlasmaShell",
+            member: "evaluateScript",
+            arguments: [script]
+        }, function(reply) {
+            try {
+                var raw = "";
+                if (reply && reply.value && reply.value.value) {
+                    raw = reply.value.value;
+                } else if (reply && reply.value) {
+                    raw = String(reply.value);
+                }
+                if (raw && raw.length > 0) {
+                    var data = JSON.parse(raw);
+                    if (data && typeof data === "object") {
+                        root.dynamicPanelTop = (typeof data.top === "number") ? data.top : 0;
+                        root.dynamicPanelBottom = (typeof data.bottom === "number") ? data.bottom : 0;
+                        root.dynamicPanelLeft = (typeof data.left === "number") ? data.left : 0;
+                        root.dynamicPanelRight = (typeof data.right === "number") ? data.right : 0;
+                    }
+                }
+            } catch (e) {}
+        }, function(err) {});
+    }
+
     Component.onCompleted: {
         root.ensureKWinScriptLoaded();
+        root.updatePanelMargins();
     }
 
     function toggleOverview() {
@@ -189,14 +237,52 @@ PlasmoidItem {
         overviewDialog.title = "Veronica Overview:open:" + root.fadeDuration;
         overviewDialog.visible = true;
 
-        // Save original hiding mode ONLY if not already in temporary state, then set dodge-windows panels to 'windowsgobelow'
+        // Save original hiding mode ONLY if not already in temporary state, set dodge-windows panels to 'windowsgobelow', and compute dynamic panel margins across all edges
+        const script = "var pans = panels(); var top = 0, bottom = 0, left = 0, right = 0; " +
+            "for (var i = 0; i < pans.length; i++) { " +
+            "  var p = pans[i]; " +
+            "  p.currentConfigGroup = ['General']; " +
+            "  if (p.hiding === 'dodgewindows') { " +
+            "    p.writeConfig('OriginalHiding', 'dodgewindows'); " +
+            "    p.hiding = 'windowsgobelow'; " +
+            "  } " +
+            "  var hMode = p.readConfig('OriginalHiding') || p.hiding; " +
+            "  if (hMode !== 'autohide') { " +
+            "    var thickness = p.height || 0; " +
+            "    if (p.floating) thickness += 16; " +
+            "    if (p.location === 'top') top = Math.max(top, thickness); " +
+            "    else if (p.location === 'bottom') bottom = Math.max(bottom, thickness); " +
+            "    else if (p.location === 'left') left = Math.max(left, thickness); " +
+            "    else if (p.location === 'right') right = Math.max(right, thickness); " +
+            "  } " +
+            "} " +
+            "print(JSON.stringify({top: top, bottom: bottom, left: left, right: right}));";
+
         DBus.SessionBus.asyncCall({
             service: "org.kde.plasmashell",
             path: "/PlasmaShell",
             iface: "org.kde.PlasmaShell",
             member: "evaluateScript",
-            arguments: ["var pans = panels(); for (var i = 0; i < pans.length; i++) { pans[i].currentConfigGroup = ['General']; if (pans[i].hiding === 'dodgewindows') { pans[i].writeConfig('OriginalHiding', 'dodgewindows'); pans[i].hiding = 'windowsgobelow'; } }"]
-        });
+            arguments: [script]
+        }, function(reply) {
+            try {
+                var raw = "";
+                if (reply && reply.value && reply.value.value) {
+                    raw = reply.value.value;
+                } else if (reply && reply.value) {
+                    raw = String(reply.value);
+                }
+                if (raw && raw.length > 0) {
+                    var data = JSON.parse(raw);
+                    if (data && typeof data === "object") {
+                        root.dynamicPanelTop = (typeof data.top === "number") ? data.top : 0;
+                        root.dynamicPanelBottom = (typeof data.bottom === "number") ? data.bottom : 0;
+                        root.dynamicPanelLeft = (typeof data.left === "number") ? data.left : 0;
+                        root.dynamicPanelRight = (typeof data.right === "number") ? data.right : 0;
+                    }
+                }
+            } catch (e) {}
+        }, function(err) {});
     }
 
     property var pendingWindowActivation: null
@@ -326,6 +412,11 @@ PlasmoidItem {
             height: overviewDialog.lockedHeight
             isOverviewOpen: root.isOverviewOpen
             lastActiveWinId: root.lastActiveWinId
+
+            panelMarginTop: root.dynamicPanelTop
+            panelMarginBottom: root.dynamicPanelBottom
+            panelMarginLeft: root.dynamicPanelLeft
+            panelMarginRight: root.dynamicPanelRight
 
             onRequestDesktopSwitch: desktopId => root.recordDesktopSwitch(desktopId)
             onRequestTaskMoved: targetDesktopId => {
