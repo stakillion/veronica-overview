@@ -36,6 +36,10 @@ Item {
     property string appId: ""
     property int appPid: 0
     property var winIdList: []
+    property var targetPlayer: null
+    property bool hasAudioStream: false
+    property bool playingAudio: false
+    property bool isAudioMuted: false
     property bool hasDuplicateNewWindow: false
     property var dynamicItems: []
     property bool showAllPlaces: false
@@ -74,6 +78,7 @@ Item {
     }
 
     signal requestDismissOverview()
+    signal requestToggleMuted()
     signal requestNewInstance()
     signal requestMove()
     signal requestResize()
@@ -266,34 +271,38 @@ Item {
         });
 
         // 3. Media Player Controls (shown whenever media is actively playing or paused)
-        let playerData = null;
-        let urlsToTry = [];
-        if (wrapper.launcherUrl && String(wrapper.launcherUrl).length > 0) {
-            urlsToTry.push(wrapper.launcherUrl);
-        }
-        if (effectiveUrl && String(effectiveUrl).length > 0 && urlsToTry.indexOf(effectiveUrl) === -1) {
-            urlsToTry.push(effectiveUrl);
-        }
-        try {
-            const dec = backend.tryDecodeApplicationsUrl(effectiveUrl);
-            if (dec && String(dec).length > 0 && urlsToTry.indexOf(dec) === -1) {
-                urlsToTry.push(dec);
+        let playerData = wrapper.targetPlayer;
+        if (!playerData) {
+            let urlsToTry = [];
+            if (wrapper.launcherUrl && String(wrapper.launcherUrl).length > 0) {
+                urlsToTry.push(wrapper.launcherUrl);
             }
-        } catch (_) {}
+            if (effectiveUrl && String(effectiveUrl).length > 0 && urlsToTry.indexOf(effectiveUrl) === -1) {
+                urlsToTry.push(effectiveUrl);
+            }
+            try {
+                const dec = backend.tryDecodeApplicationsUrl(effectiveUrl);
+                if (dec && String(dec).length > 0 && urlsToTry.indexOf(dec) === -1) {
+                    urlsToTry.push(dec);
+                }
+            } catch (_) {}
 
-        for (let u of urlsToTry) {
-            if (!u) continue;
-            if (wrapper.appPid > 0) {
+            for (let u of urlsToTry) {
+                if (!u) continue;
+                if (wrapper.appPid > 0) {
+                    try {
+                        playerData = mpris2Source.playerForLauncherUrl(u, wrapper.appPid);
+                        if (playerData) break;
+                    } catch (_) {}
+                }
                 try {
-                    playerData = mpris2Source.playerForLauncherUrl(u, wrapper.appPid);
+                    playerData = mpris2Source.playerForLauncherUrl(u, 0);
                     if (playerData) break;
                 } catch (_) {}
             }
-            try {
-                playerData = mpris2Source.playerForLauncherUrl(u, 0);
-                if (playerData) break;
-            } catch (_) {}
         }
+
+        const hasAudioStreamToDisplay = wrapper.hasAudioStream && (wrapper.playingAudio || wrapper.isAudioMuted);
 
         if (playerData && playerData.canControl && !(wrapper.winIdList && wrapper.winIdList.length > 1)) {
             const status = playerData.playbackStatus;
@@ -349,10 +358,31 @@ Item {
                 menu.addMenuItem(stopItem, startNewInstanceItem);
                 createdItems.push(stopItem);
 
-                let mediaSep = wrapper.newSeparator(menu);
-                menu.addMenuItem(mediaSep, startNewInstanceItem);
-                createdItems.push(mediaSep);
+                // If no audio stream follows, add separator after media player controls
+                if (!hasAudioStreamToDisplay) {
+                    let mediaSep = wrapper.newSeparator(menu);
+                    menu.addMenuItem(mediaSep, startNewInstanceItem);
+                    createdItems.push(mediaSep);
+                }
             }
+        }
+
+        // 4. Audio Stream Mute/Unmute Control (matches KDE Task Manager ContextMenu.qml)
+        if (hasAudioStreamToDisplay) {
+            let muteItem = wrapper.newMenuItem(menu);
+            muteItem.checkable = true;
+            muteItem.checked = wrapper.isAudioMuted;
+            muteItem.clicked.connect(() => {
+                wrapper.requestToggleMuted();
+            });
+            muteItem.text = i18nc("@option:check inmenu, no separate unmute action", "Mute");
+            muteItem.icon = "audio-volume-muted" + (Qt.application.layoutDirection === Qt.RightToLeft ? "-rtl" : "");
+            menu.addMenuItem(muteItem, startNewInstanceItem);
+            createdItems.push(muteItem);
+
+            let audioSep = wrapper.newSeparator(menu);
+            menu.addMenuItem(audioSep, startNewInstanceItem);
+            createdItems.push(audioSep);
         }
 
         wrapper.dynamicItems = createdItems;

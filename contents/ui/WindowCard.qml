@@ -23,12 +23,29 @@ Rectangle {
 
     property bool showTitle: true
     property bool showCloseButton: true
+    property bool showAudioIndicator: Plasmoid.configuration.showAudioIndicator !== false
+    property bool showCardMediaControls: Plasmoid.configuration.showCardMediaControls !== false
+    property bool hasAudioStream: false
+    property bool playingAudio: false
+    property bool isAudioMuted: false
+
+    property bool hasMediaControl: false
+    property bool isMediaPlaying: false
+    property bool canMediaPause: true
+    property bool canMediaPlay: true
+    property bool canMediaGoPrevious: false
+    property bool canMediaGoNext: false
+
     property int itemRadius: 14
     property bool isBeingDragged: false
 
     signal activated()
     signal selected()
     signal closed()
+    signal audioMuteToggled()
+    signal mediaPreviousClicked()
+    signal mediaPlayPauseClicked()
+    signal mediaNextClicked()
     signal aspectDiscovered(real aspect)
     signal contextMenuRequested(real mouseX, real mouseY, var visualParent)
     signal dragStarted(real itemGlobalX, real itemGlobalY, real grabX, real grabY)
@@ -69,7 +86,10 @@ Rectangle {
     opacity: isBeingDragged ? 0.30 : 1.0
     Behavior on opacity { NumberAnimation { duration: 150 } }
 
-    readonly property bool isHovered: Boolean((mouseArea && mouseArea.containsMouse) || (closeMouse && closeMouse.containsMouse))
+    readonly property bool isHovered: Boolean(
+        (mouseArea && mouseArea.containsMouse) ||
+        (clusterHoverHandler && clusterHoverHandler.hovered)
+    )
 
     color: isActive
         ? Qt.tint(Kirigami.Theme.backgroundColor, Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.18))
@@ -102,7 +122,7 @@ Rectangle {
             Layout.preferredHeight: root.isCompact ? 18 : 24
             Layout.maximumHeight: root.isCompact ? 18 : 24
             Layout.leftMargin: 2
-            Layout.rightMargin: root.showCloseButton ? (root.isCompact ? 22 : 28) : 2
+            Layout.rightMargin: topActionCluster.visible ? (topActionCluster.width + 8) : 2
             spacing: root.isCompact ? 4 : 6
 
             Kirigami.Icon {
@@ -254,43 +274,219 @@ Rectangle {
         }
     }
 
-    // GNOME-style Close button in top-right corner of card (always visible)
-    Rectangle {
-        id: closeBtn
+    // Top-right action button cluster: [Audio indicator] [[Previous track] [Play/pause] [next track]] [Close button]
+    Row {
+        id: topActionCluster
         z: 100
-        visible: root.showCloseButton
         anchors.top: parent.top
         anchors.right: parent.right
-        anchors.margins: 6
-        width: root.isCompact ? 18 : 22
-        height: root.isCompact ? 18 : 22
-        radius: width / 2
-        color: closeMouse.containsMouse
-            ? (Kirigami.Theme.negativeTextColor ? Kirigami.Theme.negativeTextColor : "#e01b24")
-            : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.85)
-        border.width: 1
-        border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.20)
-        Behavior on color { ColorAnimation { duration: 120 } }
+        anchors.topMargin: root.isCompact ? 4 : 6
+        anchors.rightMargin: root.isCompact ? 4 : 6
+        spacing: 6
+        layoutDirection: Qt.LeftToRight
 
-        Kirigami.Icon {
-            anchors.centerIn: parent
-            source: "window-close-symbolic"
-            implicitWidth: 12
-            implicitHeight: 12
-            color: closeMouse.containsMouse ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+        HoverHandler {
+            id: clusterHoverHandler
         }
 
-        MouseArea {
-            id: closeMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: mouse => {
-                mouse.accepted = true;
-                root.closed();
+        // 1. Audio playing/muted indicator button: [Audio indicator]
+        Rectangle {
+            id: audioIndicatorBtn
+            visible: root.showAudioIndicator && root.hasAudioStream && (root.playingAudio || root.isAudioMuted)
+            anchors.verticalCenter: parent.verticalCenter
+            width: root.isCompact ? 18 : 22
+            height: root.isCompact ? 18 : 22
+            radius: width / 2
+            color: audioMouse.containsMouse
+                ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.25)
+                : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.85)
+            border.width: 1
+            border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.20)
+            Behavior on color { ColorAnimation { duration: 120 } }
+
+            Kirigami.Icon {
+                anchors.centerIn: parent
+                source: root.isAudioMuted ? "audio-volume-muted" : "audio-volume-high"
+                implicitWidth: root.isCompact ? 11 : 13
+                implicitHeight: root.isCompact ? 11 : 13
+                color: audioMouse.containsMouse
+                    ? Kirigami.Theme.highlightColor
+                    : (root.isAudioMuted ? Kirigami.Theme.disabledTextColor : Kirigami.Theme.textColor)
             }
-            QQC2.ToolTip.text: i18n("Close")
-            QQC2.ToolTip.visible: containsMouse
+
+            MouseArea {
+                id: audioMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: mouse => {
+                    mouse.accepted = true;
+                    root.audioMuteToggled();
+                }
+                QQC2.ToolTip.text: root.isAudioMuted ? i18n("Unmute") : i18n("Mute")
+                QQC2.ToolTip.visible: containsMouse
+                QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+            }
+        }
+
+        // 2. Media playback controls: [[Previous track] [Play/pause] [Next track]]
+        Row {
+            id: mediaControlsRow
+            visible: root.showCardMediaControls && root.hasMediaControl
+            spacing: 3
+            anchors.verticalCenter: parent.verticalCenter
+
+            // Previous Track
+            Rectangle {
+                id: prevBtn
+                width: root.isCompact ? 18 : 22
+                height: root.isCompact ? 18 : 22
+                radius: width / 2
+                enabled: root.canMediaGoPrevious
+                opacity: enabled ? 1.0 : 0.45
+                color: prevMouse.containsMouse && enabled
+                    ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.25)
+                    : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.75)
+                border.width: 1
+                border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
+                Behavior on color { ColorAnimation { duration: 120 } }
+
+                Kirigami.Icon {
+                    anchors.centerIn: parent
+                    source: "media-skip-backward"
+                    implicitWidth: root.isCompact ? 10 : 12
+                    implicitHeight: root.isCompact ? 10 : 12
+                    color: prevMouse.containsMouse && prevBtn.enabled ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
+                }
+
+                MouseArea {
+                    id: prevMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: mouse => {
+                        mouse.accepted = true;
+                        root.mediaPreviousClicked();
+                    }
+                    QQC2.ToolTip.text: i18n("Previous Track")
+                    QQC2.ToolTip.visible: containsMouse && parent.enabled
+                    QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                }
+            }
+
+            // Play / Pause
+            Rectangle {
+                id: playPauseBtn
+                width: root.isCompact ? 18 : 22
+                height: root.isCompact ? 18 : 22
+                radius: width / 2
+                enabled: root.isMediaPlaying ? root.canMediaPause : root.canMediaPlay
+                opacity: enabled ? 1.0 : 0.45
+                color: playPauseMouse.containsMouse && enabled
+                    ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.25)
+                    : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.75)
+                border.width: 1
+                border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
+                Behavior on color { ColorAnimation { duration: 120 } }
+
+                Kirigami.Icon {
+                    anchors.centerIn: parent
+                    source: root.isMediaPlaying ? "media-playback-pause" : "media-playback-start"
+                    implicitWidth: root.isCompact ? 10 : 12
+                    implicitHeight: root.isCompact ? 10 : 12
+                    color: playPauseMouse.containsMouse && playPauseBtn.enabled ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
+                }
+
+                MouseArea {
+                    id: playPauseMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: mouse => {
+                        mouse.accepted = true;
+                        root.mediaPlayPauseClicked();
+                    }
+                    QQC2.ToolTip.text: root.isMediaPlaying ? i18n("Pause") : i18n("Play")
+                    QQC2.ToolTip.visible: containsMouse && parent.enabled
+                    QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                }
+            }
+
+            // Next Track
+            Rectangle {
+                id: nextBtn
+                width: root.isCompact ? 18 : 22
+                height: root.isCompact ? 18 : 22
+                radius: width / 2
+                enabled: root.canMediaGoNext
+                opacity: enabled ? 1.0 : 0.45
+                color: nextMouse.containsMouse && enabled
+                    ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.25)
+                    : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.75)
+                border.width: 1
+                border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
+                Behavior on color { ColorAnimation { duration: 120 } }
+
+                Kirigami.Icon {
+                    anchors.centerIn: parent
+                    source: "media-skip-forward"
+                    implicitWidth: root.isCompact ? 10 : 12
+                    implicitHeight: root.isCompact ? 10 : 12
+                    color: nextMouse.containsMouse && nextBtn.enabled ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
+                }
+
+                MouseArea {
+                    id: nextMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: mouse => {
+                        mouse.accepted = true;
+                        root.mediaNextClicked();
+                    }
+                    QQC2.ToolTip.text: i18n("Next Track")
+                    QQC2.ToolTip.visible: containsMouse && parent.enabled
+                    QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                }
+            }
+        }
+
+        // 3. Close button: [Close button]
+        Rectangle {
+            id: closeBtn
+            visible: root.showCloseButton
+            anchors.verticalCenter: parent.verticalCenter
+            width: root.isCompact ? 18 : 22
+            height: root.isCompact ? 18 : 22
+            radius: width / 2
+            color: closeMouse.containsMouse
+                ? (Kirigami.Theme.negativeTextColor ? Kirigami.Theme.negativeTextColor : "#e01b24")
+                : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.85)
+            border.width: 1
+            border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.20)
+            Behavior on color { ColorAnimation { duration: 120 } }
+
+            Kirigami.Icon {
+                anchors.centerIn: parent
+                source: "window-close-symbolic"
+                implicitWidth: 12
+                implicitHeight: 12
+                color: closeMouse.containsMouse ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+            }
+
+            MouseArea {
+                id: closeMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: mouse => {
+                    mouse.accepted = true;
+                    root.closed();
+                }
+                QQC2.ToolTip.text: i18n("Close")
+                QQC2.ToolTip.visible: containsMouse
+                QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+            }
         }
     }
 }

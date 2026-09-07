@@ -22,6 +22,8 @@ Kirigami.FormLayout {
 
     property alias cfg_showWorkspaceStrip: showWorkspaceStripCheckBox.checked
     property alias cfg_showCloseButtons: showCloseButtonsCheckBox.checked
+    property alias cfg_showAudioIndicator: showAudioIndicatorCheckBox.checked
+    property alias cfg_showCardMediaControls: showCardMediaControlsCheckBox.checked
     property alias cfg_hasBottomPanel: hasBottomPanelCheckBox.checked
 
     Kirigami.Separator {
@@ -188,6 +190,16 @@ Kirigami.FormLayout {
         id: showCloseButtonsCheckBox
         Kirigami.FormData.label: i18n("Window Cards:")
         text: i18n("Show close button on window cards")
+    }
+
+    QQC2.CheckBox {
+        id: showAudioIndicatorCheckBox
+        text: i18n("Display indicator when a window is playing audio")
+    }
+
+    QQC2.CheckBox {
+        id: showCardMediaControlsCheckBox
+        text: i18n("Display media playback controls on window cards")
     }
 
     QQC2.CheckBox {

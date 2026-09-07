@@ -45,5 +45,11 @@
     <entry name="hasBottomPanel" type="Bool">
       <default>true</default>
     </entry>
+    <entry name="showAudioIndicator" type="Bool">
+      <default>true</default>
+    </entry>
+    <entry name="showCardMediaControls" type="Bool">
+      <default>true</default>
+    </entry>
   </group>
 </kcfg>

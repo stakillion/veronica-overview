@@ -3,6 +3,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.taskmanager as TaskManager
+import org.kde.plasma.private.mpris as Mpris
 
 Item {
     id: pageRoot
@@ -13,6 +14,12 @@ Item {
 
     property int desktopCount: 1
     property var desktopIds: []
+    property var pulseAudio: null
+
+    Mpris.Mpris2Model {
+        id: gridMprisSource
+    }
+    readonly property var mprisSource: gridMprisSource
 
     property bool showCloseButtons: true
     property int cardRadius: 14
@@ -328,6 +335,72 @@ Item {
                 readonly property var itemLauncherUrl: model.LauncherUrlWithoutIcon !== undefined ? model.LauncherUrlWithoutIcon : (model.LauncherUrl !== undefined ? model.LauncherUrl : "")
                 readonly property var itemWinIds: model.WinIdList ? model.WinIdList : []
                 readonly property int itemAppPid: model.AppPid !== undefined ? model.AppPid : 0
+                property var audioStreams: []
+                readonly property bool hasAudioStream: audioStreams.length > 0
+                readonly property bool playingAudio: hasAudioStream && audioStreams.some(item => !item.corked)
+                readonly property bool isAudioMuted: hasAudioStream && audioStreams.every(item => item.muted)
+                readonly property bool shouldDisplayAudioIndicator: hasAudioStream && (playingAudio || isAudioMuted)
+
+                function setAssignedAudioStreams(s) {
+                    cellItem.audioStreams = s || [];
+                }
+
+                function toggleMuted() {
+                    if (cellItem.isAudioMuted) {
+                        cellItem.audioStreams.forEach(item => item.unmute());
+                    } else {
+                        cellItem.audioStreams.forEach(item => item.mute());
+                    }
+                }
+
+                property bool hasMediaControl: false
+                property bool isMediaPlaying: false
+                property bool canMediaPause: true
+                property bool canMediaPlay: true
+                property bool canMediaGoPrevious: false
+                property bool canMediaGoNext: false
+                property var activePlayer: null
+                property int assignedPlayerIndex: -1
+
+                function setAssignedPlayer(p, pIdx) {
+                    if (p && p.canControl) {
+                        const st = p.playbackStatus;
+                        const isPl = st === Mpris.PlaybackStatus.Playing;
+                        const isPa = st === Mpris.PlaybackStatus.Paused;
+                        if (isPl || isPa) {
+                            cellItem.activePlayer = p;
+                            cellItem.assignedPlayerIndex = (pIdx !== undefined) ? pIdx : -1;
+                            cellItem.hasMediaControl = true;
+                            cellItem.isMediaPlaying = isPl;
+                            cellItem.canMediaPause = Boolean(p.canPause);
+                            cellItem.canMediaPlay = Boolean(p.canPlay);
+                            cellItem.canMediaGoPrevious = Boolean(p.canGoPrevious);
+                            cellItem.canMediaGoNext = Boolean(p.canGoNext);
+                            return;
+                        }
+                    }
+                    cellItem.activePlayer = null;
+                    cellItem.assignedPlayerIndex = -1;
+                    cellItem.hasMediaControl = false;
+                    cellItem.isMediaPlaying = false;
+                }
+
+                Component.onCompleted: {
+                    pageRoot.updateAllMediaControls();
+                    pageRoot.updateAllAudioStreams();
+                }
+                onItemAppPidChanged: {
+                    pageRoot.updateAllMediaControls();
+                    pageRoot.updateAllAudioStreams();
+                }
+                onItemAppIdChanged: {
+                    pageRoot.updateAllMediaControls();
+                    pageRoot.updateAllAudioStreams();
+                }
+                onItemTitleChanged: {
+                    pageRoot.updateAllMediaControls();
+                    pageRoot.updateAllAudioStreams();
+                }
                 readonly property bool itemIsActive: Boolean(model.IsActive)
                 readonly property bool itemIsMinimized: Boolean(model.IsMinimized)
                 readonly property bool itemIsMaximized: Boolean(model.IsMaximized)
@@ -402,6 +475,29 @@ Item {
                     isBeingDragged: pageRoot.draggedTaskIndex === cellItem.index
                     showTitle: true
                     showCloseButton: pageRoot.showCloseButtons
+                    hasAudioStream: cellItem.shouldDisplayAudioIndicator
+                    playingAudio: cellItem.playingAudio
+                    isAudioMuted: cellItem.isAudioMuted
+                    hasMediaControl: cellItem.hasMediaControl
+                    isMediaPlaying: cellItem.isMediaPlaying
+                    canMediaPause: cellItem.canMediaPause
+                    canMediaPlay: cellItem.canMediaPlay
+                    canMediaGoPrevious: cellItem.canMediaGoPrevious
+                    canMediaGoNext: cellItem.canMediaGoNext
+
+                    onAudioMuteToggled: cellItem.toggleMuted()
+                    onMediaPreviousClicked: {
+                        if (cellItem.activePlayer) cellItem.activePlayer.Previous();
+                    }
+                    onMediaPlayPauseClicked: {
+                        if (cellItem.activePlayer) {
+                            if (cellItem.isMediaPlaying) cellItem.activePlayer.Pause();
+                            else cellItem.activePlayer.Play();
+                        }
+                    }
+                    onMediaNextClicked: {
+                        if (cellItem.activePlayer) cellItem.activePlayer.Next();
+                    }
 
                     onAspectDiscovered: asp => {
                         cellItem.customAspect = asp;
@@ -429,6 +525,257 @@ Item {
         }
     }
 
+    Connections {
+        target: pageRoot.pulseAudio
+        function onStreamsChanged() {
+            pageRoot.updateAllAudioStreams();
+        }
+    }
+
+    function getAllMprisPlayers() {
+        if (!pageRoot.mprisSource) return [];
+        const count = pageRoot.mprisSource.rowCount();
+        const rawPlayers = [];
+        for (let i = 0; i < count; ++i) {
+            const idx = pageRoot.mprisSource.index(i, 0);
+            const p = pageRoot.mprisSource.data(idx, 257);
+            if (p && typeof p === "object" && p.canControl) {
+                rawPlayers.push(p);
+            }
+        }
+
+        // Deduplicate multiple interfaces representing the same playback session
+        // (e.g. plasma-browser-integration and brave.instance for the same browser)
+        const uniquePlayers = [];
+        for (let j = 0; j < rawPlayers.length; ++j) {
+            const cur = rawPlayers[j];
+            const curTrack = (cur.track || "").toLowerCase().trim();
+            const curIdentity = (cur.identity || "").toLowerCase().trim();
+
+            let isDup = false;
+            if (curTrack.length > 0) {
+                for (let k = 0; k < uniquePlayers.length; ++k) {
+                    const ex = uniquePlayers[k];
+                    const exTrack = (ex.track || "").toLowerCase().trim();
+                    const exIdentity = (ex.identity || "").toLowerCase().trim();
+
+                    if (exTrack.length > 0 && (curTrack === exTrack || curTrack.indexOf(exTrack) === 0 || exTrack.indexOf(curTrack) === 0)) {
+                        if (curIdentity === exIdentity || cur.instancePid === ex.instancePid || (cur.desktopEntry && cur.desktopEntry === ex.desktopEntry)) {
+                            isDup = true;
+                            if (!ex.desktopEntry && cur.desktopEntry) {
+                                uniquePlayers[k] = cur;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!isDup) {
+                uniquePlayers.push(cur);
+            }
+        }
+
+        return uniquePlayers;
+    }
+
+    function calculateMatchScore(cell, p, siblingCount) {
+        if (!cell || !p) return -1;
+        let score = 0;
+
+        const pEntry = (p.desktopEntry || "").toLowerCase().trim();
+        const pIdent = (p.identity || "").toLowerCase().trim();
+        const cAppId = (cell.itemAppId || "").toLowerCase().trim().replace(/\.desktop$/, "");
+        const cAppName = (cell.itemAppName || "").toLowerCase().trim();
+        const cLauncher = String(cell.itemLauncherUrl || "").toLowerCase();
+
+        let appMatches = false;
+        if (pEntry && (pEntry === cAppId || cLauncher.indexOf(pEntry) !== -1 || cAppId.indexOf(pEntry) !== -1)) {
+            appMatches = true;
+            score += 20;
+        } else if (pIdent && (pIdent === cAppName || pIdent.indexOf(cAppName) !== -1 || cAppName.indexOf(pIdent) !== -1)) {
+            appMatches = true;
+            score += 15;
+        } else if (cell.itemAppPid > 0 && p.instancePid > 0 && p.instancePid === cell.itemAppPid) {
+            appMatches = true;
+            score += 20;
+        }
+
+        if (!appMatches) {
+            return -1;
+        }
+
+        if (cell.itemAppPid > 0 && (p.instancePid === cell.itemAppPid || p.kdePid === cell.itemAppPid)) {
+            score += 10;
+        }
+
+        const cardTitle = (cell.itemTitle || "").toLowerCase();
+        const track = (p.track || "").toLowerCase().trim();
+        const artist = (p.artist || "").toLowerCase().trim();
+
+        // Clean strings for robust matching across dashes/brackets/formatting
+        const cleanStr = (s) => (s || "").replace(/[^a-z0-9]/g, " ").trim();
+        const cTitle = cleanStr(cardTitle);
+        const cTrack = cleanStr(track);
+        const cArtist = cleanStr(artist);
+
+        let titleMatched = false;
+        if (cTrack.length > 2 && (cTitle.indexOf(cTrack) !== -1 || cTrack.indexOf(cTitle) !== -1)) {
+            score += 100;
+            titleMatched = true;
+        } else if (track.length > 1 && (cardTitle.indexOf(track) !== -1 || track.indexOf(cardTitle) !== -1)) {
+            score += 100;
+            titleMatched = true;
+        }
+
+        if (cArtist.length > 2 && cTitle.indexOf(cArtist) !== -1) {
+            score += 40;
+            titleMatched = true;
+        }
+
+        // When multiple windows of the same application are open,
+        // require the window title to match the media track/artist.
+        // This strictly prevents a sibling window from claiming media it is not playing.
+        if (siblingCount > 1 && !titleMatched) {
+            return -1;
+        }
+
+        if (p.playbackStatus === Mpris.PlaybackStatus.Playing) {
+            score += 10;
+        } else if (p.playbackStatus === Mpris.PlaybackStatus.Paused) {
+            score += 5;
+        }
+
+        return score;
+    }
+
+    function updateAllMediaControls() {
+        const players = pageRoot.getAllMprisPlayers();
+        if (players.length === 0) {
+            for (let i = 0; i < cardsRepeater.count; ++i) {
+                const it = cardsRepeater.itemAt(i);
+                if (it && it.setAssignedPlayer) it.setAssignedPlayer(null);
+            }
+            return;
+        }
+
+        // Count sibling windows per application
+        const appCounts = {};
+        for (let a = 0; a < cardsRepeater.count; ++a) {
+            const c = cardsRepeater.itemAt(a);
+            if (!c || c.isSelf) continue;
+            const key = (c.itemAppId || c.itemAppName || "app").toLowerCase();
+            appCounts[key] = (appCounts[key] || 0) + 1;
+        }
+
+        const pairs = [];
+        for (let i = 0; i < cardsRepeater.count; ++i) {
+            const cell = cardsRepeater.itemAt(i);
+            if (!cell || cell.isSelf) continue;
+            const key = (cell.itemAppId || cell.itemAppName || "app").toLowerCase();
+            const sibCount = appCounts[key] || 1;
+
+            for (let j = 0; j < players.length; ++j) {
+                const p = players[j];
+                const sc = pageRoot.calculateMatchScore(cell, p, sibCount);
+                if (sc >= 0) {
+                    pairs.push({ cell: cell, cellIndex: cell.index, player: p, playerIndex: j, score: sc });
+                }
+            }
+        }
+
+        pairs.sort((a, b) => b.score - a.score);
+
+        const assignedCellIndices = new Set();
+        const assignedPlayerIndices = new Set();
+
+        for (let k = 0; k < pairs.length; ++k) {
+            const pair = pairs[k];
+            if (!assignedCellIndices.has(pair.cellIndex) && !assignedPlayerIndices.has(pair.playerIndex)) {
+                assignedCellIndices.add(pair.cellIndex);
+                assignedPlayerIndices.add(pair.playerIndex);
+                pair.cell.setAssignedPlayer(pair.player, pair.playerIndex);
+            }
+        }
+
+        for (let m = 0; m < cardsRepeater.count; ++m) {
+            const it = cardsRepeater.itemAt(m);
+            if (it && !assignedCellIndices.has(it.index) && it.setAssignedPlayer) {
+                it.setAssignedPlayer(null, -1);
+            }
+        }
+
+        pageRoot.updateAllAudioStreams();
+    }
+
+    function updateAllAudioStreams() {
+        if (!pageRoot.pulseAudio) {
+            for (let i = 0; i < cardsRepeater.count; ++i) {
+                const it = cardsRepeater.itemAt(i);
+                if (it && it.setAssignedAudioStreams) it.setAssignedAudioStreams([]);
+            }
+            return;
+        }
+
+        const pa = pageRoot.pulseAudio;
+
+        const appGroups = {};
+        for (let i = 0; i < cardsRepeater.count; ++i) {
+            const cell = cardsRepeater.itemAt(i);
+            if (!cell || cell.isSelf) continue;
+            const key = (cell.itemAppId || cell.itemAppName || "app").toLowerCase();
+            if (!appGroups[key]) appGroups[key] = [];
+            appGroups[key].push(cell);
+        }
+
+        for (let key in appGroups) {
+            const cells = appGroups[key];
+            const firstCell = cells[0];
+
+            let allStreams = [];
+            if (firstCell.itemAppId) {
+                allStreams = pa.streamsForAppId(firstCell.itemAppId);
+            }
+            if (!allStreams.length && firstCell.itemAppPid > 0) {
+                allStreams = pa.streamsForPid(firstCell.itemAppPid);
+                if (allStreams.length) {
+                    pa.registerPidMatch(firstCell.itemAppName);
+                }
+            }
+            if (!allStreams.length && firstCell.itemAppName) {
+                allStreams = pa.streamsForAppName(firstCell.itemAppName);
+            }
+
+            if (allStreams.length === 0) {
+                for (let c of cells) {
+                    if (c && c.setAssignedAudioStreams) c.setAssignedAudioStreams([]);
+                }
+                continue;
+            }
+
+            // Assign the application's audio streams to all windows of that application.
+            // When multiple windows belong to the same browser/app process, muting one mutes
+            // that application's streams, ensuring all windows stay consistent and never mute the wrong window.
+            for (let c of cells) {
+                if (c && c.setAssignedAudioStreams) {
+                    c.setAssignedAudioStreams(allStreams);
+                }
+            }
+        }
+    }
+
+    Connections {
+        target: pageRoot.mprisSource
+        function onDataChanged() {
+            pageRoot.updateAllMediaControls();
+        }
+        function onRowsInserted() {
+            pageRoot.updateAllMediaControls();
+        }
+        function onRowsRemoved() {
+            pageRoot.updateAllMediaControls();
+        }
+    }
+
     // Shared context menu instance for all cards on this page
     property int contextMenuTaskIndex: -1
 
@@ -437,6 +784,15 @@ Item {
 
         onRequestDismissOverview: {
             pageRoot.taskActivated(null);
+        }
+
+        onRequestToggleMuted: {
+            if (contextMenuTaskIndex >= 0) {
+                const item = cardsRepeater.itemAt(contextMenuTaskIndex);
+                if (item && item.toggleMuted) {
+                    item.toggleMuted();
+                }
+            }
         }
 
         onRequestNewInstance: {
@@ -492,6 +848,10 @@ Item {
         windowContextMenu.appId = cell.itemAppId || "";
         windowContextMenu.appPid = cell.itemAppPid || 0;
         windowContextMenu.winIdList = cell.itemWinIds || [];
+        windowContextMenu.targetPlayer = cell.activePlayer || null;
+        windowContextMenu.hasAudioStream = cell.shouldDisplayAudioIndicator;
+        windowContextMenu.playingAudio = cell.playingAudio;
+        windowContextMenu.isAudioMuted = cell.isAudioMuted;
         windowContextMenu.canLaunchNewInstance = cell.itemCanLaunchNewInstance;
         windowContextMenu.isOnAllDesktops = cell.itemIsOnAllDesktops;
         windowContextMenu.isVirtualDesktopsChangeable = cell.itemIsVirtualDesktopsChangeable;

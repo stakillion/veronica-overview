@@ -66,6 +66,10 @@ FocusScope {
         id: desktopInfo
     }
 
+    PulseAudio {
+        id: sharedPulseAudio
+    }
+
     Timer {
         id: scrollCooldownTimer
         interval: 220
@@ -351,6 +355,7 @@ FocusScope {
                     desktopCount: Math.max(1, desktopInfo.numberOfDesktops || (desktopInfo.desktopIds ? desktopInfo.desktopIds.length : 1))
                     desktopIds: desktopInfo.desktopIds
                     lastActiveWinId: root.lastActiveWinId
+                    pulseAudio: sharedPulseAudio
 
                     showCloseButtons: Plasmoid.configuration.showCloseButtons !== false
                     cardRadius: root.cardRadius
