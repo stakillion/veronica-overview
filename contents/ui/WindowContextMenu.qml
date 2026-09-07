@@ -2,6 +2,8 @@ import QtQuick
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.extras as PlasmaExtras
 import org.kde.taskmanager as TaskManager
+import org.kde.plasma.private.mpris as Mpris
+import plasma.applet.org.kde.plasma.taskmanager as TaskManagerApplet
 
 Item {
     id: wrapper
@@ -30,6 +32,48 @@ Item {
     property bool isExcludedFromCapture: false
     property bool isClosable: true
 
+    property var launcherUrl: ""
+    property string appId: ""
+    property int appPid: 0
+    property var winIdList: []
+    property bool hasDuplicateNewWindow: false
+    property var dynamicItems: []
+    property bool showAllPlaces: false
+    property var currentVisualParent: null
+    property real currentX: 0
+    property real currentY: 0
+    property bool hasExplicitPos: false
+
+    Component.onCompleted: {
+        try {
+            backend.showAllPlaces.connect(wrapper.handleShowAllPlaces);
+        } catch (e) {
+            console.warn("[Veronica Overview] Failed to connect backend.showAllPlaces:", e);
+        }
+    }
+
+    Component.onDestruction: {
+        try {
+            backend.showAllPlaces.disconnect(wrapper.handleShowAllPlaces);
+        } catch (_) {}
+    }
+
+    function handleShowAllPlaces() {
+        wrapper.showAllPlaces = true;
+        wrapper.loadDynamicActions();
+        if (wrapper.currentVisualParent) {
+            menu.visualParent = wrapper.currentVisualParent;
+        }
+        Qt.callLater(() => {
+            if (wrapper.hasExplicitPos) {
+                menu.open(Math.round(wrapper.currentX), Math.round(wrapper.currentY));
+            } else {
+                menu.openRelative();
+            }
+        });
+    }
+
+    signal requestDismissOverview()
     signal requestNewInstance()
     signal requestMove()
     signal requestResize()
@@ -54,6 +98,20 @@ Item {
         id: activityInfo
     }
 
+    TaskManagerApplet.Backend {
+        id: backend
+    }
+
+    Mpris.Mpris2Model {
+        id: mpris2Source
+    }
+
+    TextMetrics {
+        id: textMetrics
+        elide: Qt.ElideRight
+        elideWidth: Kirigami.Units.gridUnit * 22
+    }
+
     function newMenuItem(parentObj) {
         return Qt.createQmlObject('import org.kde.plasma.extras as PlasmaExtras; PlasmaExtras.MenuItem {}', parentObj);
     }
@@ -62,7 +120,247 @@ Item {
         return Qt.createQmlObject('import org.kde.plasma.extras as PlasmaExtras; PlasmaExtras.MenuItem { separator: true }', parentObj);
     }
 
+    function clearDynamicItems() {
+        for (let i = 0; i < dynamicItems.length; ++i) {
+            if (dynamicItems[i]) {
+                try {
+                    menu.removeMenuItem(dynamicItems[i]);
+                    dynamicItems[i].destroy();
+                } catch (e) {
+                    console.warn("[Veronica Overview] Failed to clean up dynamic item:", e);
+                }
+            }
+        }
+        wrapper.dynamicItems = [];
+        wrapper.hasDuplicateNewWindow = false;
+    }
+
+    function loadDynamicActions() {
+        wrapper.clearDynamicItems();
+
+        let effectiveUrl = wrapper.launcherUrl;
+        if (!effectiveUrl || String(effectiveUrl).length === 0) {
+            if (wrapper.appId && wrapper.appId.length > 0) {
+                let id = wrapper.appId;
+                if (!id.endsWith(".desktop")) {
+                    id += ".desktop";
+                }
+                effectiveUrl = "applications:" + id;
+            }
+        }
+
+        if (!effectiveUrl || String(effectiveUrl).length === 0) {
+            return;
+        }
+
+        let sections = [];
+
+        // 1. Places (e.g. Dolphin) or Recent Files (e.g. Brave, Kate)
+        try {
+            const placesActions = backend.placesActions(effectiveUrl, wrapper.showAllPlaces, menu);
+            if (placesActions && placesActions.length > 0) {
+                sections.push({
+                    title: i18nc("@title:group for section of menu items", "Places"),
+                    group: "places",
+                    actions: placesActions
+                });
+            } else {
+                const recents = backend.recentDocumentActions(effectiveUrl, menu);
+                if (recents && recents.length > 0) {
+                    sections.push({
+                        title: i18nc("@title:group for section of menu items", "Recent Files"),
+                        group: "recents",
+                        actions: recents
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn("[Veronica Overview] Error querying places/recent actions:", e);
+        }
+
+        // We always have actions category in KDE Plasma. Filter only non-actions first.
+        sections = sections.filter(section => section.actions && section.actions.length > 0);
+
+        // 2. JumpList Actions (e.g. Brave "New Window", "New Incognito Window", Konsole "Open New Window", "Open New Tab")
+        try {
+            const jumpList = backend.jumpListActions(effectiveUrl, menu);
+            sections.push({
+                title: i18nc("@title:group for section of menu items", "Actions"),
+                group: "actions",
+                actions: jumpList || []
+            });
+        } catch (e) {
+            console.warn("[Veronica Overview] Error querying jump list actions:", e);
+            sections.push({
+                title: i18nc("@title:group for section of menu items", "Actions"),
+                group: "actions",
+                actions: []
+            });
+        }
+
+        // C++ backend can override section heading if first element is a QString
+        sections.forEach(section => {
+            if (typeof section.actions[0] === "string") {
+                section.title = section.actions.shift();
+            }
+        });
+
+        let hasNewWindowAction = false;
+        let createdItems = [];
+
+        sections.forEach(section => {
+            if (section.actions.length > 0 || section.group === "actions") {
+                // Don't add the "Actions" header if the menu has nothing but actions in it (sections.length === 1),
+                // but DO add it if there are prior sections (e.g. Places or Recent Files, sections.length > 1)
+                if (section.group !== "actions" || sections.length > 1) {
+                    let header = wrapper.newMenuItem(menu);
+                    header.text = section.title;
+                    header.section = true;
+                    menu.addMenuItem(header, startNewInstanceItem);
+                    createdItems.push(header);
+                }
+
+                for (let i = 0; i < section.actions.length; ++i) {
+                    const act = section.actions[i];
+                    if (!act) continue;
+
+                    let item;
+                    if (act.separator || (typeof act.isSeparator === "function" && act.isSeparator())) {
+                        item = wrapper.newSeparator(menu);
+                    } else {
+                        item = wrapper.newMenuItem(menu);
+                        item.action = act;
+
+                        if (act.text) {
+                            textMetrics.text = act.text.replace("&", "&&");
+                            act.text = textMetrics.elidedText;
+
+                            const lower = act.text.toLowerCase();
+                            if (lower.indexOf("new window") !== -1 || lower.indexOf("new instance") !== -1) {
+                                hasNewWindowAction = true;
+                            }
+                        }
+
+                        const isMorePlacesAction = (act.icon && String(act.icon).indexOf("view-more") !== -1)
+                            || (act.text && act.text.indexOf("more Place") !== -1);
+
+                        const isForgetRecentAction = (act.icon && String(act.icon).indexOf("edit-clear") !== -1)
+                            || (act.text && act.text.indexOf("Forget Recent") !== -1);
+
+                        if (!isMorePlacesAction && !isForgetRecentAction) {
+                            item.clicked.connect(() => {
+                                wrapper.requestDismissOverview();
+                            });
+                            try {
+                                act.triggered.connect(() => {
+                                    wrapper.requestDismissOverview();
+                                });
+                            } catch (_) {}
+                        }
+                    }
+
+                    menu.addMenuItem(item, startNewInstanceItem);
+                    createdItems.push(item);
+                }
+            }
+        });
+
+        // 3. Media Player Controls (shown whenever media is actively playing or paused)
+        let playerData = null;
+        let urlsToTry = [];
+        if (wrapper.launcherUrl && String(wrapper.launcherUrl).length > 0) {
+            urlsToTry.push(wrapper.launcherUrl);
+        }
+        if (effectiveUrl && String(effectiveUrl).length > 0 && urlsToTry.indexOf(effectiveUrl) === -1) {
+            urlsToTry.push(effectiveUrl);
+        }
+        try {
+            const dec = backend.tryDecodeApplicationsUrl(effectiveUrl);
+            if (dec && String(dec).length > 0 && urlsToTry.indexOf(dec) === -1) {
+                urlsToTry.push(dec);
+            }
+        } catch (_) {}
+
+        for (let u of urlsToTry) {
+            if (!u) continue;
+            if (wrapper.appPid > 0) {
+                try {
+                    playerData = mpris2Source.playerForLauncherUrl(u, wrapper.appPid);
+                    if (playerData) break;
+                } catch (_) {}
+            }
+            try {
+                playerData = mpris2Source.playerForLauncherUrl(u, 0);
+                if (playerData) break;
+            } catch (_) {}
+        }
+
+        if (playerData && playerData.canControl && !(wrapper.winIdList && wrapper.winIdList.length > 1)) {
+            const status = playerData.playbackStatus;
+            const isPlaying = status === Mpris.PlaybackStatus.Playing;
+            const isPaused = status === Mpris.PlaybackStatus.Paused;
+
+            if (isPlaying || isPaused) {
+                let prevItem = wrapper.newMenuItem(menu);
+                prevItem.text = i18nc("Play previous track", "Previous Track");
+                prevItem.icon = "media-skip-backward";
+                prevItem.enabled = Boolean(playerData.canGoPrevious);
+                prevItem.clicked.connect(() => {
+                    playerData.Previous();
+                });
+                menu.addMenuItem(prevItem, startNewInstanceItem);
+                createdItems.push(prevItem);
+
+                let playPauseItem = wrapper.newMenuItem(menu);
+                playPauseItem.text = (isPlaying && playerData.canPause)
+                    ? i18nc("Pause playback", "Pause")
+                    : i18nc("Start playback", "Play");
+                playPauseItem.icon = (isPlaying && playerData.canPause)
+                    ? "media-playback-pause"
+                    : "media-playback-start";
+                playPauseItem.enabled = isPlaying ? Boolean(playerData.canPause) : Boolean(playerData.canPlay);
+                playPauseItem.clicked.connect(() => {
+                    if (playerData.playbackStatus === Mpris.PlaybackStatus.Playing) {
+                        playerData.Pause();
+                    } else {
+                        playerData.Play();
+                    }
+                });
+                menu.addMenuItem(playPauseItem, startNewInstanceItem);
+                createdItems.push(playPauseItem);
+
+                let nextItem = wrapper.newMenuItem(menu);
+                nextItem.text = i18nc("Play next track", "Next Track");
+                nextItem.icon = "media-skip-forward";
+                nextItem.enabled = Boolean(playerData.canGoNext);
+                nextItem.clicked.connect(() => {
+                    playerData.Next();
+                });
+                menu.addMenuItem(nextItem, startNewInstanceItem);
+                createdItems.push(nextItem);
+
+                let stopItem = wrapper.newMenuItem(menu);
+                stopItem.text = i18nc("Stop playback", "Stop");
+                stopItem.icon = "media-playback-stop";
+                stopItem.enabled = Boolean(playerData.canStop);
+                stopItem.clicked.connect(() => {
+                    playerData.Stop();
+                });
+                menu.addMenuItem(stopItem, startNewInstanceItem);
+                createdItems.push(stopItem);
+
+                let mediaSep = wrapper.newSeparator(menu);
+                menu.addMenuItem(mediaSep, startNewInstanceItem);
+                createdItems.push(mediaSep);
+            }
+        }
+
+        wrapper.dynamicItems = createdItems;
+        wrapper.hasDuplicateNewWindow = hasNewWindowAction;
+    }
+
     function prepareMenu() {
+        wrapper.loadDynamicActions();
         // Query desktops count
         const ids = (desktopInfo.desktopIds && desktopInfo.desktopIds.length > 0)
             ? desktopInfo.desktopIds
@@ -92,8 +390,6 @@ Item {
         const canShowActivities = numActivities > 1;
         activitiesMenuItem.visible = canShowActivities;
 
-        desktopsActivitiesSeparator.visible = canMoveDesktops || canShowActivities;
-
         // Immediately populate or clear submenus
         if (canMoveDesktops) {
             virtualDesktopsMenuItem._virtualDesktopsMenu.refresh(ids, names);
@@ -110,11 +406,22 @@ Item {
 
     function popup(visualParentItem, x, y) {
         menu.visualParent = visualParentItem;
+        wrapper.currentVisualParent = visualParentItem;
+
+        if (x !== undefined && y !== undefined) {
+            wrapper.hasExplicitPos = true;
+            wrapper.currentX = x;
+            wrapper.currentY = y;
+        } else {
+            wrapper.hasExplicitPos = false;
+        }
+
+        wrapper.showAllPlaces = false;
 
         // The moment before the context menu appears: decide whether to show submenus
         wrapper.prepareMenu();
 
-        if (x !== undefined && y !== undefined) {
+        if (wrapper.hasExplicitPos) {
             menu.open(Math.round(x), Math.round(y));
         } else {
             menu.openRelative();
@@ -137,20 +444,22 @@ Item {
                 if (activitiesMenuItem.visible) {
                     activitiesMenuItem._activitiesMenu.refresh();
                 }
+            } else if (status === PlasmaExtras.Menu.Closed) {
+                wrapper.clearDynamicItems();
+                wrapper.showAllPlaces = false;
             }
         }
 
-        // 1. Open New Window / Start New Instance (if supported)
+        // 1. Open New Window / Start New Instance (if supported and not already in jump list)
         PlasmaExtras.MenuItem {
-            visible: wrapper.canLaunchNewInstance
+            id: startNewInstanceItem
+            visible: wrapper.canLaunchNewInstance && !wrapper.hasDuplicateNewWindow
             text: i18n("Open New Window")
             icon: "window-new"
-            onClicked: wrapper.requestNewInstance()
-        }
-
-        PlasmaExtras.MenuItem {
-            separator: true
-            visible: wrapper.canLaunchNewInstance
+            onClicked: {
+                wrapper.requestNewInstance();
+                wrapper.requestDismissOverview();
+            }
         }
 
         // 2. Move to Desktop Submenu
@@ -294,14 +603,25 @@ Item {
                         });
                         activitiesMenu.addMenuItem(item);
                     }
+
+                    activitiesMenu.addMenuItem(wrapper.newSeparator(activitiesMenu));
+
+                    // Move to Activity
+                    for (let j = 0; j < running.length; ++j) {
+                        const actId = running[j];
+                        if (acts.length === 1 && String(acts[0]) === String(actId)) {
+                            continue;
+                        }
+                        item = wrapper.newMenuItem(activitiesMenu);
+                        item.text = i18n("Move to %1", activityInfo.activityName(actId) || i18n("Activity %1", j + 1));
+                        item.icon = activityInfo.activityIcon(actId) || "activities";
+                        item.clicked.connect(() => {
+                            wrapper.requestActivities([actId]);
+                        });
+                        activitiesMenu.addMenuItem(item);
+                    }
                 }
             }
-        }
-
-        PlasmaExtras.MenuItem {
-            id: desktopsActivitiesSeparator
-            separator: true
-            visible: virtualDesktopsMenuItem.visible || activitiesMenuItem.visible
         }
 
         // 4. More Submenu (Matches KDE Plasma "More")

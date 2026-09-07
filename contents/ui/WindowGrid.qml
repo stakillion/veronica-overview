@@ -325,7 +325,9 @@ Item {
                 readonly property bool isSelf: itemTitle === "Veronica Overview" || itemAppId === "stakillion.veronica.overview" || Boolean(model.SkipTaskbar) || Boolean(model.SkipPager)
                 readonly property var itemIcon: model.decoration ? model.decoration : "application-x-executable"
                 readonly property string itemAppName: model.AppName ? String(model.AppName).trim() : (model.GenericName ? String(model.GenericName).trim() : "")
+                readonly property var itemLauncherUrl: model.LauncherUrlWithoutIcon !== undefined ? model.LauncherUrlWithoutIcon : (model.LauncherUrl !== undefined ? model.LauncherUrl : "")
                 readonly property var itemWinIds: model.WinIdList ? model.WinIdList : []
+                readonly property int itemAppPid: model.AppPid !== undefined ? model.AppPid : 0
                 readonly property bool itemIsActive: Boolean(model.IsActive)
                 readonly property bool itemIsMinimized: Boolean(model.IsMinimized)
                 readonly property bool itemIsMaximized: Boolean(model.IsMaximized)
@@ -433,6 +435,10 @@ Item {
     WindowContextMenu {
         id: windowContextMenu
 
+        onRequestDismissOverview: {
+            pageRoot.taskActivated(null);
+        }
+
         onRequestNewInstance: {
             if (contextMenuTaskIndex >= 0) pageTasksModel.requestNewInstance(pageTasksModel.makeModelIndex(contextMenuTaskIndex));
         }
@@ -482,6 +488,10 @@ Item {
 
     function showWindowContextMenu(cell, mouseX, mouseY, visualParent) {
         pageRoot.contextMenuTaskIndex = cell.index;
+        windowContextMenu.launcherUrl = (cell.itemLauncherUrl !== undefined && cell.itemLauncherUrl !== null) ? cell.itemLauncherUrl : "";
+        windowContextMenu.appId = cell.itemAppId || "";
+        windowContextMenu.appPid = cell.itemAppPid || 0;
+        windowContextMenu.winIdList = cell.itemWinIds || [];
         windowContextMenu.canLaunchNewInstance = cell.itemCanLaunchNewInstance;
         windowContextMenu.isOnAllDesktops = cell.itemIsOnAllDesktops;
         windowContextMenu.isVirtualDesktopsChangeable = cell.itemIsVirtualDesktopsChangeable;
