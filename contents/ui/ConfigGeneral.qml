@@ -23,6 +23,7 @@ Kirigami.FormLayout {
     property alias cfg_showWorkspaceStrip: showWorkspaceStripCheckBox.checked
     property alias cfg_showCloseButtons: showCloseButtonsCheckBox.checked
     property alias cfg_showAudioIndicator: showAudioIndicatorCheckBox.checked
+    property alias cfg_showMicIndicator: showMicIndicatorCheckBox.checked
     property alias cfg_showCardMediaControls: showCardMediaControlsCheckBox.checked
 
     Kirigami.Separator {
@@ -194,6 +195,11 @@ Kirigami.FormLayout {
     QQC2.CheckBox {
         id: showAudioIndicatorCheckBox
         text: i18n("Display indicator when a window is playing audio")
+    }
+
+    QQC2.CheckBox {
+        id: showMicIndicatorCheckBox
+        text: i18n("Display microphone indicator when a window is using the microphone")
     }
 
     QQC2.CheckBox {

@@ -40,6 +40,9 @@ Item {
     property bool hasAudioStream: false
     property bool playingAudio: false
     property bool isAudioMuted: false
+    property bool hasMicStream: false
+    property bool recordingMic: false
+    property bool isMicMuted: false
     property bool hasDuplicateNewWindow: false
     property var dynamicItems: []
     property bool showAllPlaces: false
@@ -79,6 +82,7 @@ Item {
 
     signal requestDismissOverview()
     signal requestToggleMuted()
+    signal requestToggleMicMuted()
     signal requestNewInstance()
     signal requestMove()
     signal requestResize()
@@ -303,6 +307,7 @@ Item {
         }
 
         const hasAudioStreamToDisplay = wrapper.hasAudioStream && (wrapper.playingAudio || wrapper.isAudioMuted);
+        const hasMicStreamToDisplay = wrapper.hasMicStream && (wrapper.recordingMic || wrapper.isMicMuted);
 
         if (playerData && playerData.canControl && !(wrapper.winIdList && wrapper.winIdList.length > 1)) {
             const status = playerData.playbackStatus;
@@ -358,8 +363,8 @@ Item {
                 menu.addMenuItem(stopItem, startNewInstanceItem);
                 createdItems.push(stopItem);
 
-                // If no audio stream follows, add separator after media player controls
-                if (!hasAudioStreamToDisplay) {
+                // If no audio or microphone stream follows, add separator after media player controls
+                if (!hasAudioStreamToDisplay && !hasMicStreamToDisplay) {
                     let mediaSep = wrapper.newSeparator(menu);
                     menu.addMenuItem(mediaSep, startNewInstanceItem);
                     createdItems.push(mediaSep);
@@ -375,14 +380,30 @@ Item {
             muteItem.clicked.connect(() => {
                 wrapper.requestToggleMuted();
             });
-            muteItem.text = i18nc("@option:check inmenu, no separate unmute action", "Mute");
+            muteItem.text = i18nc("@option:check inmenu, no separate unmute action", "Mute Playback");
             muteItem.icon = "audio-volume-muted" + (Qt.application.layoutDirection === Qt.RightToLeft ? "-rtl" : "");
             menu.addMenuItem(muteItem, startNewInstanceItem);
             createdItems.push(muteItem);
+        }
 
-            let audioSep = wrapper.newSeparator(menu);
-            menu.addMenuItem(audioSep, startNewInstanceItem);
-            createdItems.push(audioSep);
+        // 5. Microphone Stream Mute/Unmute Control
+        if (hasMicStreamToDisplay) {
+            let micItem = wrapper.newMenuItem(menu);
+            micItem.checkable = true;
+            micItem.checked = wrapper.isMicMuted;
+            micItem.clicked.connect(() => {
+                wrapper.requestToggleMicMuted();
+            });
+            micItem.text = i18nc("@option:check inmenu, no separate unmute action", "Mute Microphone");
+            micItem.icon = "microphone-sensitivity-muted" + (Qt.application.layoutDirection === Qt.RightToLeft ? "-rtl" : "");
+            menu.addMenuItem(micItem, startNewInstanceItem);
+            createdItems.push(micItem);
+        }
+
+        if (hasAudioStreamToDisplay || hasMicStreamToDisplay) {
+            let muteSep = wrapper.newSeparator(menu);
+            menu.addMenuItem(muteSep, startNewInstanceItem);
+            createdItems.push(muteSep);
         }
 
         wrapper.dynamicItems = createdItems;

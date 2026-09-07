@@ -23,6 +23,13 @@ Item {
         }
     }
 
+    Connections {
+        target: sourceInstantiator.model
+        function onDataChanged() {
+            pulseAudio.streamsChanged();
+        }
+    }
+
     function registerPidMatch(appName) {
         if (!hasPidMatch(appName)) {
             pidMatches.add(appName);
@@ -115,6 +122,102 @@ Item {
             readonly property bool corked: Boolean(model.Corked)
             readonly property int volume: model.Volume || 0
             readonly property int streamIndex: model.Index !== undefined ? model.Index : (model.PulseObject ? model.PulseObject.index : index)
+
+            onPidChanged: pulseAudio.streamsChanged()
+            onCorkedChanged: pulseAudio.streamsChanged()
+            onMutedChanged: pulseAudio.streamsChanged()
+            onAppNameChanged: pulseAudio.streamsChanged()
+            onPortalAppIdChanged: pulseAudio.streamsChanged()
+
+            function mute() {
+                model.Muted = true;
+            }
+            function unmute() {
+                model.Muted = false;
+            }
+        }
+
+        onObjectAdded: (index, object) => pulseAudio.streamsChanged()
+        onObjectRemoved: (index, object) => pulseAudio.streamsChanged()
+    }
+
+    function findSourceStreamsFn(fn) {
+        const streams = [];
+        for (let i = 0, count = sourceInstantiator.count; i < count; ++i) {
+            const stream = sourceInstantiator.objectAt(i);
+            if (stream && stream.isMicrophoneStream && fn(stream)) {
+                streams.push(stream);
+            }
+        }
+        return streams;
+    }
+
+    function micStreamsForAppId(appId) {
+        const norm = normalizeAppId(appId);
+        if (!norm) return [];
+        return findSourceStreamsFn(stream => {
+            const sp = normalizeAppId(stream.portalAppId);
+            if (!sp) return false;
+            if (sp === norm) return true;
+            if (sp.indexOf("discord") !== -1 && norm.indexOf("discord") !== -1) return true;
+            return false;
+        });
+    }
+
+    function micStreamsForAppName(appName) {
+        if (!appName) return [];
+        const lower = String(appName).trim().toLowerCase();
+        if (lower.length < 2) return [];
+        return findSourceStreamsFn(stream => {
+            const aName = (stream.appName || "").toLowerCase();
+            const bName = (stream.binary || "").toLowerCase();
+            if (bName && (bName === lower || lower === bName + ".desktop")) return true;
+            if (aName && (aName === lower || aName === "[" + lower + "]")) return true;
+            return false;
+        });
+    }
+
+    function micStreamsForPid(pid) {
+        if (!pid || pid <= 0) return [];
+        return findSourceStreamsFn(stream => !stream.portalAppId && stream.pid > 0 && stream.pid === pid);
+    }
+
+    readonly property Instantiator sourceInstantiator: Instantiator {
+        model: PlasmaPa.PulseObjectFilterModel {
+            filters: [ { role: "VirtualStream", value: false } ]
+            sourceModel: PlasmaPa.SourceOutputModel {}
+        }
+
+        delegate: QtObject {
+            id: sourceDelegate
+            required property var model
+            readonly property int pid: model.Client ? (model.Client.properties ? (model.Client.properties["application.process.id"] || 0) : 0) : 0
+            property int parentPid: -1
+            readonly property string appName: model.Client ? (model.Client.properties ? (model.Client.properties["application.name"] || "") : "") : ""
+            readonly property string binary: model.Client ? (model.Client.properties ? (model.Client.properties["application.process.binary"] || "") : "") : ""
+            readonly property string portalAppId: model.Client ? (model.Client.properties ? (model.Client.properties["pipewire.access.portal.app_id"] || "") : "") : ""
+            readonly property bool muted: Boolean(model.Muted)
+            readonly property bool corked: Boolean(model.Corked)
+            readonly property int volume: model.Volume || 0
+            readonly property int streamIndex: model.Index !== undefined ? model.Index : (model.PulseObject ? model.PulseObject.index : index)
+            readonly property int deviceIndex: model.PulseObject ? (model.PulseObject.deviceIndex !== undefined ? model.PulseObject.deviceIndex : -1) : -1
+
+            readonly property var streamProps: model.PulseObject ? model.PulseObject.properties : null
+            readonly property string mediaName: streamProps ? (streamProps["media.name"] || "") : ""
+            readonly property string mediaRole: streamProps ? (streamProps["media.role"] || "") : ""
+
+            // Strict microphone validation:
+            // 1. Must have a valid client
+            // 2. Must be connected to a valid source device (not -1 / 4294967295)
+            // 3. Must NOT be an internal desktop/game audio loopback capture (e.g. discord_capture, game capture)
+            // 4. Must NOT be a screen or video recording monitor
+            readonly property bool isMicrophoneStream: {
+                if (!model.Client) return false;
+                if (deviceIndex < 0 || deviceIndex === 4294967295) return false;
+                if (appName === "discord_capture" || mediaName === "game capture") return false;
+                if (mediaRole === "screen" || mediaRole === "video") return false;
+                return true;
+            }
 
             onPidChanged: pulseAudio.streamsChanged()
             onCorkedChanged: pulseAudio.streamsChanged()

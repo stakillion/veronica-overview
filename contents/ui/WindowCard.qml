@@ -24,10 +24,15 @@ Rectangle {
     property bool showTitle: true
     property bool showCloseButton: true
     property bool showAudioIndicator: Plasmoid.configuration.showAudioIndicator !== false
+    property bool showMicIndicator: Plasmoid.configuration.showMicIndicator !== false
     property bool showCardMediaControls: Plasmoid.configuration.showCardMediaControls !== false
     property bool hasAudioStream: false
     property bool playingAudio: false
     property bool isAudioMuted: false
+
+    property bool hasMicStream: false
+    property bool recordingMic: false
+    property bool isMicMuted: false
 
     property bool hasMediaControl: false
     property bool isMediaPlaying: false
@@ -43,6 +48,7 @@ Rectangle {
     signal selected()
     signal closed()
     signal audioMuteToggled()
+    signal micMuteToggled()
     signal mediaPreviousClicked()
     signal mediaPlayPauseClicked()
     signal mediaNextClicked()
@@ -323,13 +329,56 @@ Rectangle {
                     mouse.accepted = true;
                     root.audioMuteToggled();
                 }
-                QQC2.ToolTip.text: root.isAudioMuted ? i18n("Unmute") : i18n("Mute")
+                QQC2.ToolTip.text: root.isAudioMuted ? i18n("Unmute Playback") : i18n("Mute Playback")
                 QQC2.ToolTip.visible: containsMouse
                 QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
             }
         }
 
-        // 2. Media playback controls: [[Previous track] [Play/pause] [Next track]]
+        // 2. Microphone recording/muted indicator button: [Mic indicator]
+        Rectangle {
+            id: micIndicatorBtn
+            visible: root.showMicIndicator && root.hasMicStream && (root.recordingMic || root.isMicMuted)
+            anchors.verticalCenter: parent.verticalCenter
+            width: root.isCompact ? 18 : 22
+            height: root.isCompact ? 18 : 22
+            radius: width / 2
+            color: micMouse.containsMouse
+                ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.25)
+                : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.85)
+            border.width: 1
+            border.color: root.isMicMuted
+                ? Qt.rgba(Kirigami.Theme.negativeTextColor.r, Kirigami.Theme.negativeTextColor.g, Kirigami.Theme.negativeTextColor.b, 0.50)
+                : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.20)
+            Behavior on color { ColorAnimation { duration: 120 } }
+            Behavior on border.color { ColorAnimation { duration: 120 } }
+
+            Kirigami.Icon {
+                anchors.centerIn: parent
+                source: root.isMicMuted ? "microphone-sensitivity-muted" : "microphone-sensitivity-high"
+                implicitWidth: root.isCompact ? 11 : 13
+                implicitHeight: root.isCompact ? 11 : 13
+                color: micMouse.containsMouse
+                    ? Kirigami.Theme.highlightColor
+                    : (root.isMicMuted ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor)
+            }
+
+            MouseArea {
+                id: micMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: mouse => {
+                    mouse.accepted = true;
+                    root.micMuteToggled();
+                }
+                QQC2.ToolTip.text: root.isMicMuted ? i18n("Unmute Microphone") : i18n("Mute Microphone")
+                QQC2.ToolTip.visible: containsMouse
+                QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+            }
+        }
+
+        // 3. Media playback controls: [[Previous track] [Play/pause] [Next track]]
         Row {
             id: mediaControlsRow
             visible: root.showCardMediaControls && root.hasMediaControl

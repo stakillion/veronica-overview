@@ -48,6 +48,9 @@
     <entry name="showAudioIndicator" type="Bool">
       <default>true</default>
     </entry>
+    <entry name="showMicIndicator" type="Bool">
+      <default>true</default>
+    </entry>
     <entry name="showCardMediaControls" type="Bool">
       <default>true</default>
     </entry>

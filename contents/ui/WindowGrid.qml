@@ -415,6 +415,24 @@ Item {
                     }
                 }
 
+                property var micStreams: []
+                readonly property bool hasMicStream: micStreams.length > 0
+                readonly property bool recordingMic: hasMicStream && micStreams.some(item => !item.corked)
+                readonly property bool isMicMuted: hasMicStream && micStreams.every(item => item.muted)
+                readonly property bool shouldDisplayMicIndicator: hasMicStream && (recordingMic || isMicMuted)
+
+                function setAssignedMicStreams(s) {
+                    cellItem.micStreams = s || [];
+                }
+
+                function toggleMicMuted() {
+                    if (cellItem.isMicMuted) {
+                        cellItem.micStreams.forEach(item => item.unmute());
+                    } else {
+                        cellItem.micStreams.forEach(item => item.mute());
+                    }
+                }
+
                 property bool hasMediaControl: false
                 property bool isMediaPlaying: false
                 property bool canMediaPause: true
@@ -545,6 +563,11 @@ Item {
                     hasAudioStream: cellItem.shouldDisplayAudioIndicator
                     playingAudio: cellItem.playingAudio
                     isAudioMuted: cellItem.isAudioMuted
+
+                    hasMicStream: cellItem.shouldDisplayMicIndicator
+                    recordingMic: cellItem.recordingMic
+                    isMicMuted: cellItem.isMicMuted
+                    onMicMuteToggled: cellItem.toggleMicMuted()
                     hasMediaControl: cellItem.hasMediaControl
                     isMediaPlaying: cellItem.isMediaPlaying
                     canMediaPause: cellItem.canMediaPause
@@ -778,9 +801,21 @@ Item {
         if (!pageRoot.pulseAudio) {
             for (let i = 0; i < cardsRepeater.count; ++i) {
                 const it = cardsRepeater.itemAt(i);
-                if (it && it.setAssignedAudioStreams) it.setAssignedAudioStreams([]);
+                if (it) {
+                    if (it.setAssignedAudioStreams) it.setAssignedAudioStreams([]);
+                    if (it && it.setAssignedMicStreams) it.setAssignedMicStreams([]);
+                }
             }
             return;
+        }
+
+        // Reset all cards first to guarantee closed or stale streams immediately vanish
+        for (let i = 0; i < cardsRepeater.count; ++i) {
+            const it = cardsRepeater.itemAt(i);
+            if (it) {
+                if (it.setAssignedAudioStreams) it.setAssignedAudioStreams([]);
+                if (it && it.setAssignedMicStreams) it.setAssignedMicStreams([]);
+            }
         }
 
         const pa = pageRoot.pulseAudio;
@@ -804,27 +839,31 @@ Item {
             }
             if (!allStreams.length && firstCell.itemAppPid > 0) {
                 allStreams = pa.streamsForPid(firstCell.itemAppPid);
-                if (allStreams.length) {
-                    pa.registerPidMatch(firstCell.itemAppName);
-                }
             }
             if (!allStreams.length && firstCell.itemAppName) {
                 allStreams = pa.streamsForAppName(firstCell.itemAppName);
             }
 
-            if (allStreams.length === 0) {
-                for (let c of cells) {
-                    if (c && c.setAssignedAudioStreams) c.setAssignedAudioStreams([]);
-                }
-                continue;
-            }
-
-            // Assign the application's audio streams to all windows of that application.
-            // When multiple windows belong to the same browser/app process, muting one mutes
-            // that application's streams, ensuring all windows stay consistent and never mute the wrong window.
             for (let c of cells) {
                 if (c && c.setAssignedAudioStreams) {
                     c.setAssignedAudioStreams(allStreams);
+                }
+            }
+
+            let allMicStreams = [];
+            if (firstCell.itemAppId) {
+                allMicStreams = pa.micStreamsForAppId(firstCell.itemAppId);
+            }
+            if (!allMicStreams.length && firstCell.itemAppPid > 0) {
+                allMicStreams = pa.micStreamsForPid(firstCell.itemAppPid);
+            }
+            if (!allMicStreams.length && firstCell.itemAppName) {
+                allMicStreams = pa.micStreamsForAppName(firstCell.itemAppName);
+            }
+
+            for (let c of cells) {
+                if (c && c.setAssignedMicStreams) {
+                    c.setAssignedMicStreams(allMicStreams);
                 }
             }
         }
@@ -858,6 +897,15 @@ Item {
                 const item = cardsRepeater.itemAt(contextMenuTaskIndex);
                 if (item && item.toggleMuted) {
                     item.toggleMuted();
+                }
+            }
+        }
+
+        onRequestToggleMicMuted: {
+            if (contextMenuTaskIndex >= 0) {
+                const item = cardsRepeater.itemAt(contextMenuTaskIndex);
+                if (item && item.toggleMicMuted) {
+                    item.toggleMicMuted();
                 }
             }
         }
@@ -919,6 +967,9 @@ Item {
         windowContextMenu.hasAudioStream = cell.shouldDisplayAudioIndicator;
         windowContextMenu.playingAudio = cell.playingAudio;
         windowContextMenu.isAudioMuted = cell.isAudioMuted;
+        windowContextMenu.hasMicStream = cell.shouldDisplayMicIndicator;
+        windowContextMenu.recordingMic = cell.recordingMic;
+        windowContextMenu.isMicMuted = cell.isMicMuted;
         windowContextMenu.canLaunchNewInstance = cell.itemCanLaunchNewInstance;
         windowContextMenu.isOnAllDesktops = cell.itemIsOnAllDesktops;
         windowContextMenu.isVirtualDesktopsChangeable = cell.itemIsVirtualDesktopsChangeable;
