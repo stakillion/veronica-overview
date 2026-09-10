@@ -25,6 +25,8 @@ Kirigami.FormLayout {
     property alias cfg_showAudioIndicator: showAudioIndicatorCheckBox.checked
     property alias cfg_showMicIndicator: showMicIndicatorCheckBox.checked
     property alias cfg_showCardMediaControls: showCardMediaControlsCheckBox.checked
+    property alias cfg_alternateCardStyle: alternateCardStyleCheckBox.checked
+    property alias cfg_alternateCardIconSize: iconSizeSlider.value
 
     Kirigami.Separator {
         Kirigami.FormData.isSection: true
@@ -199,11 +201,35 @@ Kirigami.FormLayout {
 
     QQC2.CheckBox {
         id: showMicIndicatorCheckBox
-        text: i18n("Display microphone indicator when a window is using the microphone")
+        text: i18n("Display indicator when a window is using the microphone")
     }
 
     QQC2.CheckBox {
         id: showCardMediaControlsCheckBox
         text: i18n("Display media playback controls on window cards")
+    }
+
+    QQC2.CheckBox {
+        id: alternateCardStyleCheckBox
+        text: i18n("Alternate window card style")
+    }
+
+    RowLayout {
+        visible: alternateCardStyleCheckBox.checked
+        Kirigami.FormData.label: i18n("Icon size:")
+        spacing: Kirigami.Units.smallSpacing
+
+        QQC2.Slider {
+            id: iconSizeSlider
+            from: 24
+            to: 96
+            stepSize: 2
+            Layout.fillWidth: true
+        }
+
+        QQC2.Label {
+            text: i18n("%1 px", Math.round(iconSizeSlider.value))
+            Layout.preferredWidth: Kirigami.Units.gridUnit * 3
+        }
     }
 }

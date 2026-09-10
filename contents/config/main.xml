@@ -42,6 +42,12 @@
     <entry name="showCloseButtons" type="Bool">
       <default>true</default>
     </entry>
+    <entry name="alternateCardStyle" type="Bool">
+      <default>false</default>
+    </entry>
+    <entry name="alternateCardIconSize" type="Int">
+      <default>56</default>
+    </entry>
     <entry name="hasBottomPanel" type="Bool">
       <default>true</default>
     </entry>

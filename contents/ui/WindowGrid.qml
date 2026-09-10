@@ -22,6 +22,8 @@ Item {
     readonly property var mprisSource: gridMprisSource
 
     property bool showCloseButtons: true
+    property bool alternateCardStyle: false
+    property int alternateCardIconSize: 56
     property int cardRadius: 14
     property bool overviewOpen: false
     property int draggedTaskIndex: -1
@@ -171,26 +173,89 @@ Item {
     }
 
     readonly property int windowCount: pageTasksModel.count
-    readonly property real spacing: Math.max(12, Math.min(20, (pageRoot.width / 100)))
 
-    // Dynamic aspect-ratio-aware column calculation - NO hardcoded column limit!
+    // Extra vertical hang below each card from the overlapping bottom application icon
+    readonly property real bottomIconHang: pageRoot.alternateCardStyle ? Math.round((pageRoot.alternateCardIconSize > 0 ? pageRoot.alternateCardIconSize : 56) / 2) : 0
+    readonly property real baseSpacing: Math.max(12, Math.min(20, Math.round(pageRoot.width / 100)))
+
+    // Column (horizontal) spacing
+    readonly property real colSpacing: pageRoot.baseSpacing
+
+    // Row (vertical) spacing accounts for the application icon hanging below each card
+    readonly property real spacing: pageRoot.baseSpacing + pageRoot.bottomIconHang
+
+    // Dynamic aspect-ratio-aware grid solver:
+    // - Based completely on actual available viewport space (width & height)
+    // - Maximizes card size while filling both horizontal and vertical space
+    // - Special constraint: 3 cards are always 2 rows, 1.5 columns (Row 0: 2, Row 1: 1)
     readonly property int cols: {
         if (windowCount <= 1) return 1;
-        if (windowCount === 2) return 2;
-        if (windowCount <= 4) return 2;
-        if (windowCount <= 6) return 3;
+        if (windowCount === 2) return (pageRoot.width >= pageRoot.height) ? 2 : 1;
+        if (windowCount === 3) return 2; // Always 2 rows, 1.5 columns (2 on top, 1 on bottom)
 
-        // For N >= 7: calculate optimal columns to fill the viewport aspect ratio
-        const vAspect = Math.max(1.0, (pageRoot.width - 48) / Math.max(100, pageRoot.height - 36));
-        const targetAspect = vAspect / 1.55;
-        const optCols = Math.round(Math.sqrt(windowCount * targetAspect));
-        return Math.max(2, optCols);
+        const W = Math.max(200, pageRoot.width - 32);
+        const H = Math.max(200, pageRoot.height - 32);
+
+        // Determine average aspect ratio of windows on this workspace
+        let sumAsp = 0;
+        let validAspCount = 0;
+        for (let i = 0; i < pageRoot.windowCount; i++) {
+            const a = pageRoot.getAspectAtIndex(i);
+            if (a > 0.5 && a < 3.5) {
+                sumAsp += a;
+                validAspCount++;
+            }
+        }
+        const avgAspect = validAspCount > 0 ? (sumAsp / validAspCount) : ((Screen.width > 0 && Screen.height > 0) ? (Screen.width / Screen.height) : 1.65);
+
+        let bestScore = -1;
+        let bestCols = 2;
+
+        // Evaluate all possible row counts R and select the (R, C) layout that
+        // maximizes card area while filling as much vertical and horizontal space as possible
+        const maxRows = Math.min(pageRoot.windowCount, 8);
+        for (let R = 1; R <= maxRows; R++) {
+            const C = Math.ceil(pageRoot.windowCount / R);
+            if (C < 1) continue;
+            // Prevent single-row ribbon on non-ultrawide viewports for N >= 4
+            if (R === 1 && pageRoot.windowCount >= 4 && W < H * 2.8) continue;
+
+            const maxColW = (W - (C - 1) * pageRoot.colSpacing) / C;
+            const maxRowH = (H - (R - 1) * pageRoot.spacing - pageRoot.bottomIconHang) / R;
+            if (maxColW < 90 || maxRowH < 70) continue;
+
+            const pH_h = maxRowH - pageRoot.nonPreviewH;
+            const pH_w = (maxColW - pageRoot.nonPreviewW) / avgAspect;
+            const pH = Math.min(pH_h, pH_w);
+            if (pH < 20) continue;
+
+            const cardH = pH + pageRoot.nonPreviewH;
+            const cardW = pH * avgAspect + pageRoot.nonPreviewW;
+
+            const usedH = R * cardH + (R - 1) * pageRoot.spacing + pageRoot.bottomIconHang;
+            const widestK = Math.min(C, pageRoot.windowCount);
+            const usedW = widestK * cardW + (widestK - 1) * pageRoot.colSpacing;
+
+            const fillH = Math.min(1.0, usedH / H);
+            const fillW = Math.min(1.0, usedW / W);
+
+            // Objective function: maximize card size while strongly rewarding full screen coverage (both vertical & horizontal)
+            const totalCardSpace = pageRoot.windowCount * cardW * cardH;
+            const score = totalCardSpace * Math.pow(fillH, 1.8) * Math.pow(fillW, 0.6);
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestCols = C;
+            }
+        }
+
+        return Math.max(1, Math.min(pageRoot.windowCount, bestCols));
     }
 
     readonly property int rowCount: Math.max(1, Math.ceil(windowCount / cols))
 
-    readonly property real availW: Math.max(100, pageRoot.width - (pageRoot.spacing * (cols - 1)) - 32)
-    readonly property real availH: Math.max(100, pageRoot.height - (pageRoot.spacing * (rowCount - 1)) - 32)
+    readonly property real availW: Math.max(100, pageRoot.width - (pageRoot.colSpacing * (cols - 1)) - 32)
+    readonly property real availH: Math.max(100, pageRoot.height - (pageRoot.spacing * (rowCount - 1)) - pageRoot.bottomIconHang - 32)
 
     // Slot bounds fill the entire available grid space across all columns and rows
     readonly property real slotWidth: {
@@ -201,7 +266,7 @@ Item {
 
     readonly property real slotHeight: {
         const base = availH / rowCount;
-        if (windowCount === 1) return Math.min(base, pageRoot.height * 0.80);
+        if (windowCount === 1) return Math.min(base, (pageRoot.height - pageRoot.bottomIconHang) * 0.80);
         return base;
     }
 
@@ -261,15 +326,32 @@ Item {
         const endIdx = Math.min(pageRoot.windowCount, (rIndex + 1) * pageRoot.cols);
         if (startIdx >= endIdx) return pageRoot.slotHeight;
 
-        let minH = pageRoot.slotHeight;
+        const heights = [];
+        let maxH = 0;
         for (let i = startIdx; i < endIdx; i++) {
             const asp = pageRoot.getAspectAtIndex(i);
             const h = pageRoot.getCardHeightForAspect(asp);
-            if (h < minH) {
-                minH = h;
+            heights.push(h);
+            if (h > maxH) {
+                maxH = h;
             }
         }
-        return minH;
+
+        if (maxH <= 0) return pageRoot.slotHeight;
+
+        // Try to keep window cards at maximum uniform height.
+        // Ignore extreme short-and-wide outlier windows (height < 72% of maxH in the row)
+        // so that a single short-and-wide window does not shrink the normal windows down tiny.
+        const threshold = maxH * 0.72;
+        let targetH = maxH;
+        for (let j = 0; j < heights.length; j++) {
+            if (heights[j] >= threshold) {
+                if (heights[j] < targetH) {
+                    targetH = heights[j];
+                }
+            }
+        }
+        return targetH;
     }
 
     readonly property real actualGridHeight: {
@@ -283,7 +365,7 @@ Item {
         return totalH;
     }
 
-    readonly property real gridStartY: Math.max(16, (pageRoot.height - actualGridHeight) / 2)
+    readonly property real gridStartY: Math.max(16, (pageRoot.height - actualGridHeight - pageRoot.bottomIconHang) / 2)
 
     function getRowY(rIndex) {
         let y = pageRoot.gridStartY;
@@ -294,16 +376,25 @@ Item {
     }
 
     function getCardWidthForAspect(aspect) {
-        const a = (aspect > 0) ? aspect : ((Screen.width > 0 && Screen.height > 0) ? (Screen.width / Screen.height) : 1.6);
+        const a = (aspect > 0) ? aspect : 1.6;
         const maxPW = Math.max(16, pageRoot.slotWidth - pageRoot.nonPreviewW);
         const maxPH = Math.max(16, pageRoot.slotHeight - pageRoot.nonPreviewH);
         const slotAspect = maxPW / maxPH;
 
+        if (pageRoot.windowCount === 1) {
+            if (a >= slotAspect) {
+                return Math.max(24, Math.round(maxPW + pageRoot.nonPreviewW));
+            } else {
+                return Math.max(24, Math.round(maxPH * a + pageRoot.nonPreviewW));
+            }
+        }
+
+        // Cards fill available width when aspect >= slotAspect; otherwise scale to match the full slotHeight
         if (a >= slotAspect) {
             return Math.max(24, Math.round(maxPW + pageRoot.nonPreviewW));
         } else {
             const pW = Math.round(maxPH * a);
-            return Math.max(24, Math.round(pW + pageRoot.nonPreviewW));
+            return Math.max(24, Math.min(pageRoot.slotWidth, Math.round(pW + pageRoot.nonPreviewW)));
         }
     }
 
@@ -326,10 +417,8 @@ Item {
             const it = cardsRepeater.itemAt(i);
             if (it && it.cardW > 0) return it.cardW;
         }
-        const rIdx = Math.floor(i / pageRoot.cols);
-        const rowH = pageRoot.getRowHeight(rIdx);
         const asp = pageRoot.getAspectAtIndex(i);
-        return pageRoot.getCardWidthForHeightAndAspect(rowH, asp);
+        return pageRoot.getCardWidthForAspect(asp);
     }
 
     function getRowMetrics(rIndex) {
@@ -346,14 +435,14 @@ Item {
             widths.push(w);
             sumW += w;
         }
-        const totalW = sumW + ((count - 1) * pageRoot.spacing);
+        const totalW = sumW + ((count - 1) * pageRoot.colSpacing);
         const startX = Math.max(16, (pageRoot.width - totalW) / 2);
 
         const offsets = [];
         let curX = startX;
         for (let j = 0; j < count; j++) {
             offsets.push(curX);
-            curX += widths[j] + pageRoot.spacing;
+            curX += widths[j] + pageRoot.colSpacing;
         }
         return { totalWidth: totalW, startX: startX, offsets: offsets };
     }
@@ -375,7 +464,7 @@ Item {
         anchors.fill: parent
         visible: pageRoot.windowCount > 0
 
-        readonly property real totalGridHeight: pageRoot.actualGridHeight
+        readonly property real totalGridHeight: pageRoot.actualGridHeight + pageRoot.bottomIconHang
         readonly property real gridStartY: pageRoot.gridStartY
 
         Repeater {
@@ -519,8 +608,8 @@ Item {
 
                 onEffectiveAspectChanged: pageRoot.layoutRefreshTick++
 
-                readonly property real cardH: pageRoot.getRowHeight(rowIndex)
-                readonly property real cardW: pageRoot.getCardWidthForHeightAndAspect(cardH, effectiveAspect)
+                readonly property real cardH: Math.min(pageRoot.getRowHeight(rowIndex), pageRoot.getCardHeightForAspect(effectiveAspect))
+                readonly property real cardW: pageRoot.getCardWidthForAspect(effectiveAspect)
 
                 function publishGeometry() {
                     if (pageRoot.overviewOpen && pageRoot.isCurrentPage && cardW > 0 && cardH > 0) {
@@ -538,11 +627,14 @@ Item {
                 readonly property var rowMetrics: pageRoot.getRowMetrics(rowIndex)
 
                 x: (rowMetrics && Array.isArray(rowMetrics.offsets) && colIndex < rowMetrics.offsets.length && rowMetrics.offsets[colIndex] !== undefined) ? rowMetrics.offsets[colIndex] : Math.max(16, (pageRoot.width - cardW) / 2)
-                y: pageRoot.getRowY(rowIndex)
+                y: pageRoot.getRowY(rowIndex) + (pageRoot.getRowHeight(rowIndex) - cardH) / 2
                 width: cardW
                 height: cardH
 
+                z: (cellItem.index === pageRoot.draggedTaskIndex) ? 200 : (windowCard.isHovered ? 100 : (cellItem.index === pageRoot.selectedIndex ? 10 : 1))
+
                 WindowCard {
+                    id: windowCard
                     anchors.fill: parent
 
                     targetModelIndex: cellItem.index
@@ -560,6 +652,8 @@ Item {
                     isBeingDragged: pageRoot.draggedTaskIndex === cellItem.index
                     showTitle: true
                     showCloseButton: pageRoot.showCloseButtons
+                    alternateCardStyle: pageRoot.alternateCardStyle
+                    alternateCardIconSize: pageRoot.alternateCardIconSize
                     hasAudioStream: cellItem.shouldDisplayAudioIndicator
                     playingAudio: cellItem.playingAudio
                     isAudioMuted: cellItem.isAudioMuted

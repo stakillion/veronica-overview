@@ -23,6 +23,8 @@ Rectangle {
 
     property bool showTitle: true
     property bool showCloseButton: true
+    property bool alternateCardStyle: Plasmoid.configuration.alternateCardStyle === true
+    property int alternateCardIconSize: Plasmoid.configuration.alternateCardIconSize || 56
     property bool showAudioIndicator: Plasmoid.configuration.showAudioIndicator !== false
     property bool showMicIndicator: Plasmoid.configuration.showMicIndicator !== false
     property bool showCardMediaControls: Plasmoid.configuration.showCardMediaControls !== false
@@ -94,7 +96,8 @@ Rectangle {
 
     readonly property bool isHovered: Boolean(
         (mouseArea && mouseArea.containsMouse) ||
-        (clusterHoverHandler && clusterHoverHandler.hovered)
+        (clusterHoverHandler && clusterHoverHandler.hovered) ||
+        (bottomIconHoverHandler && bottomIconHoverHandler.hovered)
     )
 
     color: isActive
@@ -127,7 +130,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: root.isCompact ? 18 : 24
             Layout.maximumHeight: root.isCompact ? 18 : 24
-            Layout.leftMargin: 2
+            Layout.leftMargin: root.alternateCardStyle ? (topActionCluster.visible ? (topActionCluster.width + 8) : 2) : 2
             Layout.rightMargin: topActionCluster.visible ? (topActionCluster.width + 8) : 2
             spacing: root.isCompact ? 4 : 6
 
@@ -136,6 +139,7 @@ Rectangle {
                 implicitWidth: root.isCompact ? 14 : 18
                 implicitHeight: root.isCompact ? 14 : 18
                 Layout.alignment: Qt.AlignVCenter
+                visible: !root.alternateCardStyle
             }
 
             QQC2.Label {
@@ -146,6 +150,7 @@ Rectangle {
                 elide: Text.ElideRight
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
+                horizontalAlignment: root.alternateCardStyle ? Text.AlignHCenter : Text.AlignLeft
             }
         }
 
@@ -535,6 +540,45 @@ Rectangle {
                 QQC2.ToolTip.text: i18n("Close")
                 QQC2.ToolTip.visible: containsMouse
                 QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+            }
+        }
+    }
+
+    // Application icon positioned on the bottom edge, overlapping the border
+    Item {
+        id: bottomAppIconItem
+        visible: root.alternateCardStyle
+        z: 90
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.bottom
+
+        readonly property real baseSize: root.alternateCardIconSize > 0 ? root.alternateCardIconSize : 56
+        readonly property real scaleRatio: root.isCompact ? 0.55 : (root.height < 180 ? 0.70 : (root.height < 320 ? 0.85 : 1.0))
+        width: Math.max(20, Math.round(baseSize * scaleRatio))
+        height: width
+
+        HoverHandler {
+            id: bottomIconHoverHandler
+        }
+
+        Kirigami.Icon {
+            anchors.fill: parent
+            source: root.iconSource
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onClicked: mouse => {
+                mouse.accepted = true;
+                if (mouse.button === Qt.RightButton) {
+                    root.selected();
+                    root.contextMenuRequested(mouse.x, mouse.y, bottomAppIconItem);
+                } else {
+                    root.activated();
+                }
             }
         }
     }
