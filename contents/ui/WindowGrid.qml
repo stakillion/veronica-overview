@@ -320,11 +320,20 @@ Item {
         const endIdx = Math.min(pageRoot.windowCount, (rIndex + 1) * pageRoot.cols);
         if (startIdx >= endIdx) return pageRoot.slotHeight;
 
+        const maxPH = Math.max(16, pageRoot.slotHeight - pageRoot.nonPreviewH);
+        const maxPW = Math.max(16, pageRoot.slotWidth - pageRoot.nonPreviewW);
+        const slotAspect = maxPW / maxPH;
+
         const heights = [];
         let maxH = 0;
         for (let i = startIdx; i < endIdx; i++) {
             const asp = pageRoot.getAspectAtIndex(i);
-            const h = pageRoot.getCardHeightForAspect(asp);
+            const a = (asp > 0) ? asp : 1.6;
+            let h = pageRoot.slotHeight;
+            if (a >= slotAspect) {
+                const pH = Math.round(maxPW / a);
+                h = Math.max(24, Math.round(pH + pageRoot.nonPreviewH));
+            }
             heights.push(h);
             if (h > maxH) {
                 maxH = h;
@@ -369,33 +378,11 @@ Item {
         return y;
     }
 
-    function getCardWidthForAspect(aspect) {
+    function getCardHeight(rIndex, aspect) {
         const a = (aspect > 0) ? aspect : 1.6;
+        const rowH = (rIndex >= 0) ? pageRoot.getRowHeight(rIndex) : pageRoot.slotHeight;
+        const maxPH = Math.max(16, rowH - pageRoot.nonPreviewH);
         const maxPW = Math.max(16, pageRoot.slotWidth - pageRoot.nonPreviewW);
-        const maxPH = Math.max(16, pageRoot.slotHeight - pageRoot.nonPreviewH);
-        const slotAspect = maxPW / maxPH;
-
-        if (pageRoot.windowCount === 1) {
-            if (a >= slotAspect) {
-                return Math.max(24, Math.round(maxPW + pageRoot.nonPreviewW));
-            } else {
-                return Math.max(24, Math.round(maxPH * a + pageRoot.nonPreviewW));
-            }
-        }
-
-        // Cards fill available width when aspect >= slotAspect; otherwise scale to match the full slotHeight
-        if (a >= slotAspect) {
-            return Math.max(24, Math.round(maxPW + pageRoot.nonPreviewW));
-        } else {
-            const pW = Math.round(maxPH * a);
-            return Math.max(24, Math.min(pageRoot.slotWidth, Math.round(pW + pageRoot.nonPreviewW)));
-        }
-    }
-
-    function getCardHeightForAspect(aspect) {
-        const a = (aspect > 0) ? aspect : ((Screen.width > 0 && Screen.height > 0) ? (Screen.width / Screen.height) : 1.6);
-        const maxPW = Math.max(16, pageRoot.slotWidth - pageRoot.nonPreviewW);
-        const maxPH = Math.max(16, pageRoot.slotHeight - pageRoot.nonPreviewH);
         const slotAspect = maxPW / maxPH;
 
         if (a >= slotAspect) {
@@ -406,13 +393,22 @@ Item {
         }
     }
 
+    function getCardWidth(rIndex, aspect) {
+        const a = (aspect > 0) ? aspect : 1.6;
+        const cardH = pageRoot.getCardHeight(rIndex, a);
+        const pH = Math.max(16, cardH - pageRoot.nonPreviewH);
+        const pW = Math.round(pH * a);
+        return Math.max(24, Math.min(pageRoot.slotWidth, Math.round(pW + pageRoot.nonPreviewW)));
+    }
+
     function getCardWidthAtIndex(i) {
         if (cardsRepeater && i >= 0 && i < cardsRepeater.count) {
             const it = cardsRepeater.itemAt(i);
             if (it && it.cardW > 0) return it.cardW;
         }
+        const rIndex = Math.floor(i / pageRoot.cols);
         const asp = pageRoot.getAspectAtIndex(i);
-        return pageRoot.getCardWidthForAspect(asp);
+        return pageRoot.getCardWidth(rIndex, asp);
     }
 
     function getRowMetrics(rIndex) {
@@ -628,8 +624,8 @@ Item {
 
                 onEffectiveAspectChanged: pageRoot.layoutRefreshTick++
 
-                readonly property real cardH: Math.min(pageRoot.getRowHeight(rowIndex), pageRoot.getCardHeightForAspect(effectiveAspect))
-                readonly property real cardW: pageRoot.getCardWidthForAspect(effectiveAspect)
+                readonly property real cardH: pageRoot.getCardHeight(rowIndex, effectiveAspect)
+                readonly property real cardW: pageRoot.getCardWidth(rowIndex, effectiveAspect)
 
                 function publishGeometry() {
                     if (pageRoot.overviewOpen && pageRoot.isCurrentPage && cardW > 0 && cardH > 0) {
