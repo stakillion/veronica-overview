@@ -25,6 +25,7 @@ Kirigami.FormLayout {
     property alias cfg_showAudioIndicator: showAudioIndicatorCheckBox.checked
     property alias cfg_showMicIndicator: showMicIndicatorCheckBox.checked
     property alias cfg_showCardMediaControls: showCardMediaControlsCheckBox.checked
+    property alias cfg_doubleSuperOpenLauncher: doubleSuperOpenLauncherCheckBox.checked
     property alias cfg_alternateCardStyle: alternateCardStyleCheckBox.checked
     property alias cfg_alternateCardIconSize: iconSizeSlider.value
 
@@ -231,5 +232,15 @@ Kirigami.FormLayout {
             text: i18n("%1 px", Math.round(iconSizeSlider.value))
             Layout.preferredWidth: Kirigami.Units.gridUnit * 3
         }
+    }
+
+    Kirigami.Separator {
+        Kirigami.FormData.isSection: true
+        Kirigami.FormData.label: i18n("Shortcuts & Navigation")
+    }
+
+    QQC2.CheckBox {
+        id: doubleSuperOpenLauncherCheckBox
+        text: i18n("Double-press Super/Meta to open Application Launcher")
     }
 }

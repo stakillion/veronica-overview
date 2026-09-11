@@ -39,6 +39,11 @@ PlasmoidItem {
     property var lastSwitchedDesktop: null
     property var lastSeenDesktop: desktopInfoMonitor.currentDesktop
 
+    property int targetLauncherId: -1
+    property real lastOverviewOpenTime: 0
+    property bool isLauncherOpenOnOverview: false
+    readonly property int doubleSuperThreshold: 380
+
     TaskManager.VirtualDesktopInfo {
         id: desktopInfoMonitor
         onCurrentDesktopChanged: {
@@ -205,6 +210,77 @@ PlasmoidItem {
     Component.onCompleted: {
         root.ensureKWinScriptLoaded();
         root.updatePanelMargins();
+        root.discoverAndPrimeLauncher();
+    }
+
+    Connections {
+        target: Plasmoid.configuration
+        function onDoubleSuperOpenLauncherChanged() {
+            if (Plasmoid.configuration.doubleSuperOpenLauncher) {
+                root.discoverAndPrimeLauncher();
+            }
+        }
+    }
+
+    function discoverAndPrimeLauncher() {
+        if (Plasmoid.configuration.doubleSuperOpenLauncher !== true) return;
+
+        const script =
+            "var pans = panels(); " +
+            "var targetId = -1; " +
+            "for (var i = 0; i < pans.length; i++) { " +
+            "  var w = pans[i].widgets(); " +
+            "  for (var j = 0; j < w.length; j++) { " +
+            "    var type = w[j].type; " +
+            "    if (type === 'stakillion.veronica.overview') continue; " +
+            "    if (type === 'org.kde.plasma.kickoff' || " +
+            "        type === 'org.kde.plasma.kicker' || " +
+            "        type === 'org.kde.plasma.kickerdash' || " +
+            "        type === 'org.kde.plasma.simplemenu' || " +
+            "        type.indexOf('launcher') !== -1 || " +
+            "        type.indexOf('kickoff') !== -1 || " +
+            "        type.indexOf('kicker') !== -1 || " +
+            "        type.indexOf('menu') !== -1 || " +
+            "        type.indexOf('start') !== -1) { " +
+            "      targetId = w[j].id; " +
+            "      if (!w[j].globalShortcut || w[j].globalShortcut === '') { " +
+            "        w[j].globalShortcut = 'Meta+Ctrl+Alt+Shift+F11'; " +
+            "      } " +
+            "      break; " +
+            "    } " +
+            "  } " +
+            "  if (targetId !== -1) break; " +
+            "} " +
+            "print(targetId);";
+
+        DBus.SessionBus.asyncCall({
+            service: "org.kde.plasmashell",
+            path: "/PlasmaShell",
+            iface: "org.kde.PlasmaShell",
+            member: "evaluateScript",
+            arguments: [script]
+        }, function(reply) {
+            try {
+                var raw = "";
+                if (reply && reply.value && reply.value.value) raw = reply.value.value;
+                else if (reply && reply.value) raw = String(reply.value);
+                var id = parseInt(raw, 10);
+                if (!isNaN(id) && id > 0) {
+                    root.targetLauncherId = id;
+                }
+            } catch (_) {}
+        }, function(_) {});
+    }
+
+    function toggleApplicationLauncher() {
+        if (root.targetLauncherId <= 0) return;
+        DBus.SessionBus.asyncCall({
+            service: "org.kde.kglobalaccel",
+            path: "/component/plasmashell",
+            iface: "org.kde.kglobalaccel.Component",
+            member: "invokeShortcut",
+            arguments: ["activate widget " + root.targetLauncherId]
+        });
     }
 
     function toggleOverview() {
@@ -216,6 +292,7 @@ PlasmoidItem {
     }
 
     function openOverview() {
+        root.discoverAndPrimeLauncher();
         root.ensureKWinScriptLoaded();
         root.ignoreWindowMoveActivation = false;
         root.lastSwitchedDesktop = null;
@@ -313,6 +390,11 @@ PlasmoidItem {
     }
 
     function finalizeClose() {
+        if (root.isLauncherOpenOnOverview) {
+            root.toggleApplicationLauncher();
+            root.isLauncherOpenOnOverview = false;
+        }
+
         isOverviewOpen = false;
         overviewDialog.visible = false;
         overviewDialog.title = "Veronica Overview";
@@ -334,7 +416,32 @@ PlasmoidItem {
     }
 
     Plasmoid.onActivated: {
-        root.toggleOverview();
+        const now = Date.now();
+        const doubleSuperEnabled = Plasmoid.configuration.doubleSuperOpenLauncher === true;
+
+        if (!root.isOverviewOpen) {
+            root.lastOverviewOpenTime = now;
+            root.isLauncherOpenOnOverview = false;
+            root.openOverview();
+            return;
+        }
+
+        // If launcher is open on top of overview: close launcher, keep overview open
+        if (root.isLauncherOpenOnOverview) {
+            root.isLauncherOpenOnOverview = false;
+            root.toggleApplicationLauncher();
+            root.grabOverviewFocus();
+            return;
+        }
+
+        // If overview is open and Meta is pressed quickly (< 380ms): open launcher
+        if (doubleSuperEnabled && root.targetLauncherId > 0 && (now - root.lastOverviewOpenTime < root.doubleSuperThreshold)) {
+            root.isLauncherOpenOnOverview = true;
+            root.toggleApplicationLauncher();
+            return;
+        }
+
+        root.closeOverview();
     }
 
     readonly property int fadeDuration: Kirigami.Units.longDuration
@@ -378,6 +485,12 @@ PlasmoidItem {
         visible: false
 
         property bool _needsFocusGrab: false
+
+        onActiveChanged: {
+            if (active && root.isLauncherOpenOnOverview) {
+                root.isLauncherOpenOnOverview = false;
+            }
+        }
 
         onVisibleChanged: {
             if (visible) {
