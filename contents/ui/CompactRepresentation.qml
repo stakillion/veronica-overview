@@ -133,7 +133,7 @@ Item {
         visible: !root.showText && root.showIcon
         anchors.fill: parent
         source: root.plasmoidItem.iconName || "search"
-        active: mouseArea.containsMouse || root.plasmoidItem.isOverviewOpen
+        active: nativeToolTip.containsMouse || root.plasmoidItem.isOverviewOpen
     }
 
     // 2. Horizontal Icon + Text mode
@@ -150,7 +150,7 @@ Item {
             Layout.preferredWidth: height
             Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
             source: root.plasmoidItem.iconName || "search"
-            active: mouseArea.containsMouse || root.plasmoidItem.isOverviewOpen
+            active: nativeToolTip.containsMouse || root.plasmoidItem.isOverviewOpen
         }
 
         QQC2.Label {
@@ -184,7 +184,7 @@ Item {
             Layout.preferredHeight: width
             Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
             source: root.plasmoidItem.iconName || "search"
-            active: mouseArea.containsMouse || root.plasmoidItem.isOverviewOpen
+            active: nativeToolTip.containsMouse || root.plasmoidItem.isOverviewOpen
         }
 
         QQC2.Label {
@@ -210,14 +210,15 @@ Item {
         property bool wasExpanded: false
 
         anchors.fill: parent
-        hoverEnabled: true
 
         onPressed: {
+            nativeToolTip.hideImmediately();
             wasExpanded = root.plasmoidItem.isOverviewOpen;
             root.forceActiveFocus(); // Claim immediate local focus to validate Wayland click event token
         }
 
         onClicked: mouse => {
+            nativeToolTip.hideImmediately();
             if (mouse.button === Qt.MiddleButton) {
                 Plasmoid.secondaryActivated();
             } else {
@@ -226,6 +227,27 @@ Item {
                 } else {
                     root.plasmoidItem.openOverview();
                 }
+            }
+        }
+    }
+
+    // Native KDE Plasma Tooltip Area (registered with global ToolTipManager)
+    PlasmaCore.ToolTipArea {
+        id: nativeToolTip
+        anchors.fill: parent
+        location: Plasmoid.location
+        icon: ""
+        mainText: i18n("Veronica Overview")
+        subText: i18n("A GNOME-like overview for KDE Plasma")
+        active: !root.plasmoidItem.isOverviewOpen
+        interactive: false
+    }
+
+    Connections {
+        target: root.plasmoidItem
+        function onIsOverviewOpenChanged() {
+            if (root.plasmoidItem.isOverviewOpen) {
+                nativeToolTip.hideImmediately();
             }
         }
     }

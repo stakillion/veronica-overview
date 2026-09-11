@@ -33,6 +33,9 @@ PlasmoidItem {
     activationTogglesExpanded: false
     hideOnWindowDeactivate: false
 
+    toolTipMainText: i18n("Veronica Overview")
+    toolTipSubText: i18n("A GNOME-like overview for KDE Plasma")
+
     property bool isOverviewOpen: false
     property bool ignoreWindowMoveActivation: false
     property var lastActiveWinId: null
