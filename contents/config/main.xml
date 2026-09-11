@@ -46,7 +46,7 @@
       <default>false</default>
     </entry>
     <entry name="alternateCardIconSize" type="Int">
-      <default>56</default>
+      <default>64</default>
     </entry>
     <entry name="hasBottomPanel" type="Bool">
       <default>true</default>

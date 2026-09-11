@@ -23,7 +23,7 @@ Item {
 
     property bool showCloseButtons: true
     property bool alternateCardStyle: false
-    property int alternateCardIconSize: 56
+    property int alternateCardIconSize: 64
     property int cardRadius: 14
     property bool overviewOpen: false
     property int draggedTaskIndex: -1
@@ -174,15 +174,9 @@ Item {
 
     readonly property int windowCount: pageTasksModel.count
 
-    // Extra vertical hang below each card from the overlapping bottom application icon
-    readonly property real bottomIconHang: pageRoot.alternateCardStyle ? Math.round((pageRoot.alternateCardIconSize > 0 ? pageRoot.alternateCardIconSize : 56) / 2) : 0
-    readonly property real baseSpacing: Math.max(12, Math.min(20, Math.round(pageRoot.width / 100)))
-
-    // Column (horizontal) spacing
-    readonly property real colSpacing: pageRoot.baseSpacing
-
-    // Row (vertical) spacing accounts for the application icon hanging below each card
-    readonly property real spacing: pageRoot.baseSpacing + pageRoot.bottomIconHang
+    // Standard grid spacing
+    readonly property real spacing: Math.max(12, Math.min(20, Math.round(pageRoot.width / 100)))
+    readonly property real colSpacing: pageRoot.spacing
 
     // Dynamic aspect-ratio-aware grid solver:
     // - Based completely on actual available viewport space (width & height)
@@ -221,7 +215,7 @@ Item {
             if (R === 1 && pageRoot.windowCount >= 4 && W < H * 2.8) continue;
 
             const maxColW = (W - (C - 1) * pageRoot.colSpacing) / C;
-            const maxRowH = (H - (R - 1) * pageRoot.spacing - pageRoot.bottomIconHang) / R;
+            const maxRowH = (H - (R - 1) * pageRoot.spacing) / R;
             if (maxColW < 90 || maxRowH < 70) continue;
 
             const pH_h = maxRowH - pageRoot.nonPreviewH;
@@ -232,7 +226,7 @@ Item {
             const cardH = pH + pageRoot.nonPreviewH;
             const cardW = pH * avgAspect + pageRoot.nonPreviewW;
 
-            const usedH = R * cardH + (R - 1) * pageRoot.spacing + pageRoot.bottomIconHang;
+            const usedH = R * cardH + (R - 1) * pageRoot.spacing;
             const widestK = Math.min(C, pageRoot.windowCount);
             const usedW = widestK * cardW + (widestK - 1) * pageRoot.colSpacing;
 
@@ -255,7 +249,7 @@ Item {
     readonly property int rowCount: Math.max(1, Math.ceil(windowCount / cols))
 
     readonly property real availW: Math.max(100, pageRoot.width - (pageRoot.colSpacing * (cols - 1)) - 32)
-    readonly property real availH: Math.max(100, pageRoot.height - (pageRoot.spacing * (rowCount - 1)) - pageRoot.bottomIconHang - 32)
+    readonly property real availH: Math.max(100, pageRoot.height - (pageRoot.spacing * (rowCount - 1)) - 32)
 
     // Slot bounds fill the entire available grid space across all columns and rows
     readonly property real slotWidth: {
@@ -266,7 +260,7 @@ Item {
 
     readonly property real slotHeight: {
         const base = availH / rowCount;
-        if (windowCount === 1) return Math.min(base, (pageRoot.height - pageRoot.bottomIconHang) * 0.80);
+        if (windowCount === 1) return Math.min(base, pageRoot.height * 0.80);
         return base;
     }
 
@@ -365,7 +359,7 @@ Item {
         return totalH;
     }
 
-    readonly property real gridStartY: Math.max(16, (pageRoot.height - actualGridHeight - pageRoot.bottomIconHang) / 2)
+    readonly property real gridStartY: Math.max(16, (pageRoot.height - actualGridHeight) / 2)
 
     function getRowY(rIndex) {
         let y = pageRoot.gridStartY;
@@ -464,7 +458,7 @@ Item {
         anchors.fill: parent
         visible: pageRoot.windowCount > 0
 
-        readonly property real totalGridHeight: pageRoot.actualGridHeight + pageRoot.bottomIconHang
+        readonly property real totalGridHeight: pageRoot.actualGridHeight
         readonly property real gridStartY: pageRoot.gridStartY
 
         Repeater {
@@ -486,10 +480,21 @@ Item {
                 readonly property var itemLauncherUrl: model.LauncherUrlWithoutIcon !== undefined ? model.LauncherUrlWithoutIcon : (model.LauncherUrl !== undefined ? model.LauncherUrl : "")
                 readonly property var itemWinIds: model.WinIdList ? model.WinIdList : []
                 readonly property int itemAppPid: model.AppPid !== undefined ? model.AppPid : 0
+                readonly property int paVersion: pageRoot.pulseAudio ? pageRoot.pulseAudio.streamsVersion : 0
+
                 property var audioStreams: []
-                readonly property bool hasAudioStream: audioStreams.length > 0
-                readonly property bool playingAudio: hasAudioStream && audioStreams.some(item => !item.corked)
-                readonly property bool isAudioMuted: hasAudioStream && audioStreams.every(item => item.muted)
+                readonly property bool hasAudioStream: {
+                    const _v = paVersion;
+                    return audioStreams && audioStreams.length > 0;
+                }
+                readonly property bool playingAudio: {
+                    const _v = paVersion;
+                    return hasAudioStream && audioStreams.some(item => !item.corked);
+                }
+                readonly property bool isAudioMuted: {
+                    const _v = paVersion;
+                    return hasAudioStream && audioStreams.every(item => item.muted);
+                }
                 readonly property bool shouldDisplayAudioIndicator: hasAudioStream && (playingAudio || isAudioMuted)
 
                 function setAssignedAudioStreams(s) {
@@ -497,17 +502,29 @@ Item {
                 }
 
                 function toggleMuted() {
-                    if (cellItem.isAudioMuted) {
+                    if (!cellItem.audioStreams || cellItem.audioStreams.length === 0) return;
+                    const currentlyMuted = cellItem.audioStreams.every(item => item.muted);
+                    if (currentlyMuted) {
                         cellItem.audioStreams.forEach(item => item.unmute());
                     } else {
                         cellItem.audioStreams.forEach(item => item.mute());
                     }
+                    if (pageRoot.pulseAudio) pageRoot.pulseAudio.notifyChanged();
                 }
 
                 property var micStreams: []
-                readonly property bool hasMicStream: micStreams.length > 0
-                readonly property bool recordingMic: hasMicStream && micStreams.some(item => !item.corked)
-                readonly property bool isMicMuted: hasMicStream && micStreams.every(item => item.muted)
+                readonly property bool hasMicStream: {
+                    const _v = paVersion;
+                    return micStreams && micStreams.length > 0;
+                }
+                readonly property bool recordingMic: {
+                    const _v = paVersion;
+                    return hasMicStream && micStreams.some(item => !item.corked);
+                }
+                readonly property bool isMicMuted: {
+                    const _v = paVersion;
+                    return hasMicStream && micStreams.every(item => item.muted);
+                }
                 readonly property bool shouldDisplayMicIndicator: hasMicStream && (recordingMic || isMicMuted)
 
                 function setAssignedMicStreams(s) {
@@ -515,11 +532,14 @@ Item {
                 }
 
                 function toggleMicMuted() {
-                    if (cellItem.isMicMuted) {
+                    if (!cellItem.micStreams || cellItem.micStreams.length === 0) return;
+                    const currentlyMuted = cellItem.micStreams.every(item => item.muted);
+                    if (currentlyMuted) {
                         cellItem.micStreams.forEach(item => item.unmute());
                     } else {
                         cellItem.micStreams.forEach(item => item.mute());
                     }
+                    if (pageRoot.pulseAudio) pageRoot.pulseAudio.notifyChanged();
                 }
 
                 property bool hasMediaControl: false
@@ -903,21 +923,17 @@ Item {
             return;
         }
 
-        // Reset all cards first to guarantee closed or stale streams immediately vanish
-        for (let i = 0; i < cardsRepeater.count; ++i) {
-            const it = cardsRepeater.itemAt(i);
-            if (it) {
-                if (it.setAssignedAudioStreams) it.setAssignedAudioStreams([]);
-                if (it && it.setAssignedMicStreams) it.setAssignedMicStreams([]);
-            }
-        }
-
         const pa = pageRoot.pulseAudio;
 
         const appGroups = {};
         for (let i = 0; i < cardsRepeater.count; ++i) {
             const cell = cardsRepeater.itemAt(i);
-            if (!cell || cell.isSelf) continue;
+            if (!cell) continue;
+            if (cell.isSelf) {
+                if (cell.setAssignedAudioStreams) cell.setAssignedAudioStreams([]);
+                if (cell.setAssignedMicStreams) cell.setAssignedMicStreams([]);
+                continue;
+            }
             const key = (cell.itemAppId || cell.itemAppName || "app").toLowerCase();
             if (!appGroups[key]) appGroups[key] = [];
             appGroups[key].push(cell);

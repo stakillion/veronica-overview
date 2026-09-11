@@ -368,7 +368,7 @@ FocusScope {
 
                     showCloseButtons: Plasmoid.configuration.showCloseButtons !== false
                     alternateCardStyle: Plasmoid.configuration.alternateCardStyle === true
-                    alternateCardIconSize: Plasmoid.configuration.alternateCardIconSize || 56
+                    alternateCardIconSize: Plasmoid.configuration.alternateCardIconSize || 64
                     cardRadius: root.cardRadius
                     overviewOpen: root.isOverviewOpen
                     layoutRefreshTick: carouselTrack.layoutRefreshTick

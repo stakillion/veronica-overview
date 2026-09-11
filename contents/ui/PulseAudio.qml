@@ -10,6 +10,13 @@ Item {
 
     signal streamsChanged()
 
+    property int streamsVersion: 0
+
+    function notifyChanged() {
+        pulseAudio.streamsVersion++;
+        pulseAudio.streamsChanged();
+    }
+
     property var pidMatches: new Set()
 
     TaskManagerApplet.Backend {
@@ -19,21 +26,21 @@ Item {
     Connections {
         target: instantiator.model
         function onDataChanged() {
-            pulseAudio.streamsChanged();
+            pulseAudio.notifyChanged();
         }
     }
 
     Connections {
         target: sourceInstantiator.model
         function onDataChanged() {
-            pulseAudio.streamsChanged();
+            pulseAudio.notifyChanged();
         }
     }
 
     function registerPidMatch(appName) {
         if (!hasPidMatch(appName)) {
             pidMatches.add(appName);
-            streamsChanged();
+            notifyChanged();
         }
     }
 
@@ -118,27 +125,39 @@ Item {
             readonly property string appName: model.Client ? (model.Client.properties ? (model.Client.properties["application.name"] || "") : "") : ""
             readonly property string binary: model.Client ? (model.Client.properties ? (model.Client.properties["application.process.binary"] || "") : "") : ""
             readonly property string portalAppId: model.Client ? (model.Client.properties ? (model.Client.properties["pipewire.access.portal.app_id"] || "") : "") : ""
-            readonly property bool muted: Boolean(model.Muted)
+            readonly property bool muted: Boolean(model.PulseObject ? model.PulseObject.muted : model.Muted)
             readonly property bool corked: Boolean(model.Corked)
             readonly property int volume: model.Volume || 0
             readonly property int streamIndex: model.Index !== undefined ? model.Index : (model.PulseObject ? model.PulseObject.index : index)
 
-            onPidChanged: pulseAudio.streamsChanged()
-            onCorkedChanged: pulseAudio.streamsChanged()
-            onMutedChanged: pulseAudio.streamsChanged()
-            onAppNameChanged: pulseAudio.streamsChanged()
-            onPortalAppIdChanged: pulseAudio.streamsChanged()
+            onPidChanged: pulseAudio.notifyChanged()
+            onCorkedChanged: pulseAudio.notifyChanged()
+            onMutedChanged: pulseAudio.notifyChanged()
+            onAppNameChanged: pulseAudio.notifyChanged()
+            onPortalAppIdChanged: pulseAudio.notifyChanged()
 
             function mute() {
-                model.Muted = true;
+                if (model.PulseObject && typeof model.PulseObject.setMuted === 'function') {
+                    model.PulseObject.setMuted(true);
+                } else if (model.PulseObject && model.PulseObject.muted !== undefined) {
+                    model.PulseObject.muted = true;
+                }
+                try { model.Muted = true; } catch (_) {}
+                pulseAudio.notifyChanged();
             }
             function unmute() {
-                model.Muted = false;
+                if (model.PulseObject && typeof model.PulseObject.setMuted === 'function') {
+                    model.PulseObject.setMuted(false);
+                } else if (model.PulseObject && model.PulseObject.muted !== undefined) {
+                    model.PulseObject.muted = false;
+                }
+                try { model.Muted = false; } catch (_) {}
+                pulseAudio.notifyChanged();
             }
         }
 
-        onObjectAdded: (index, object) => pulseAudio.streamsChanged()
-        onObjectRemoved: (index, object) => pulseAudio.streamsChanged()
+        onObjectAdded: (index, object) => pulseAudio.notifyChanged()
+        onObjectRemoved: (index, object) => pulseAudio.notifyChanged()
     }
 
     function findSourceStreamsFn(fn) {
@@ -196,7 +215,7 @@ Item {
             readonly property string appName: model.Client ? (model.Client.properties ? (model.Client.properties["application.name"] || "") : "") : ""
             readonly property string binary: model.Client ? (model.Client.properties ? (model.Client.properties["application.process.binary"] || "") : "") : ""
             readonly property string portalAppId: model.Client ? (model.Client.properties ? (model.Client.properties["pipewire.access.portal.app_id"] || "") : "") : ""
-            readonly property bool muted: Boolean(model.Muted)
+            readonly property bool muted: Boolean(model.PulseObject ? model.PulseObject.muted : model.Muted)
             readonly property bool corked: Boolean(model.Corked)
             readonly property int volume: model.Volume || 0
             readonly property int streamIndex: model.Index !== undefined ? model.Index : (model.PulseObject ? model.PulseObject.index : index)
@@ -219,21 +238,33 @@ Item {
                 return true;
             }
 
-            onPidChanged: pulseAudio.streamsChanged()
-            onCorkedChanged: pulseAudio.streamsChanged()
-            onMutedChanged: pulseAudio.streamsChanged()
-            onAppNameChanged: pulseAudio.streamsChanged()
-            onPortalAppIdChanged: pulseAudio.streamsChanged()
+            onPidChanged: pulseAudio.notifyChanged()
+            onCorkedChanged: pulseAudio.notifyChanged()
+            onMutedChanged: pulseAudio.notifyChanged()
+            onAppNameChanged: pulseAudio.notifyChanged()
+            onPortalAppIdChanged: pulseAudio.notifyChanged()
 
             function mute() {
-                model.Muted = true;
+                if (model.PulseObject && typeof model.PulseObject.setMuted === 'function') {
+                    model.PulseObject.setMuted(true);
+                } else if (model.PulseObject && model.PulseObject.muted !== undefined) {
+                    model.PulseObject.muted = true;
+                }
+                try { model.Muted = true; } catch (_) {}
+                pulseAudio.notifyChanged();
             }
             function unmute() {
-                model.Muted = false;
+                if (model.PulseObject && typeof model.PulseObject.setMuted === 'function') {
+                    model.PulseObject.setMuted(false);
+                } else if (model.PulseObject && model.PulseObject.muted !== undefined) {
+                    model.PulseObject.muted = false;
+                }
+                try { model.Muted = false; } catch (_) {}
+                pulseAudio.notifyChanged();
             }
         }
 
-        onObjectAdded: (index, object) => pulseAudio.streamsChanged()
-        onObjectRemoved: (index, object) => pulseAudio.streamsChanged()
+        onObjectAdded: (index, object) => pulseAudio.notifyChanged()
+        onObjectRemoved: (index, object) => pulseAudio.notifyChanged()
     }
 }

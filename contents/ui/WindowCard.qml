@@ -24,7 +24,7 @@ Rectangle {
     property bool showTitle: true
     property bool showCloseButton: true
     property bool alternateCardStyle: Plasmoid.configuration.alternateCardStyle === true
-    property int alternateCardIconSize: Plasmoid.configuration.alternateCardIconSize || 56
+    property int alternateCardIconSize: Plasmoid.configuration.alternateCardIconSize || 64
     property bool showAudioIndicator: Plasmoid.configuration.showAudioIndicator !== false
     property bool showMicIndicator: Plasmoid.configuration.showMicIndicator !== false
     property bool showCardMediaControls: Plasmoid.configuration.showCardMediaControls !== false
@@ -312,8 +312,11 @@ Rectangle {
                 ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.25)
                 : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.85)
             border.width: 1
-            border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.20)
+            border.color: root.isAudioMuted
+                ? Qt.rgba(Kirigami.Theme.negativeTextColor.r, Kirigami.Theme.negativeTextColor.g, Kirigami.Theme.negativeTextColor.b, 0.50)
+                : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.20)
             Behavior on color { ColorAnimation { duration: 120 } }
+            Behavior on border.color { ColorAnimation { duration: 120 } }
 
             Kirigami.Icon {
                 anchors.centerIn: parent
@@ -322,15 +325,23 @@ Rectangle {
                 implicitHeight: root.isCompact ? 11 : 13
                 color: audioMouse.containsMouse
                     ? Kirigami.Theme.highlightColor
-                    : (root.isAudioMuted ? Kirigami.Theme.disabledTextColor : Kirigami.Theme.textColor)
+                    : (root.isAudioMuted ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor)
             }
 
             MouseArea {
                 id: audioMouse
                 anchors.fill: parent
+                anchors.margins: -4
+                preventStealing: true
+                acceptedButtons: Qt.LeftButton
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
+                onPressed: mouse => mouse.accepted = true
                 onClicked: mouse => {
+                    mouse.accepted = true;
+                    root.audioMuteToggled();
+                }
+                onDoubleClicked: mouse => {
                     mouse.accepted = true;
                     root.audioMuteToggled();
                 }
@@ -371,9 +382,17 @@ Rectangle {
             MouseArea {
                 id: micMouse
                 anchors.fill: parent
+                anchors.margins: -4
+                preventStealing: true
+                acceptedButtons: Qt.LeftButton
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
+                onPressed: mouse => mouse.accepted = true
                 onClicked: mouse => {
+                    mouse.accepted = true;
+                    root.micMuteToggled();
+                }
+                onDoubleClicked: mouse => {
                     mouse.accepted = true;
                     root.micMuteToggled();
                 }
@@ -544,18 +563,24 @@ Rectangle {
         }
     }
 
-    // Application icon positioned on the bottom edge, overlapping the border
+    // Application icon positioned on the bottom edge, peeking slightly over the card border
     Item {
         id: bottomAppIconItem
         visible: root.alternateCardStyle
         z: 90
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.verticalCenter: parent.bottom
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: -Math.round(height * 0.22)
 
-        readonly property real baseSize: root.alternateCardIconSize > 0 ? root.alternateCardIconSize : 56
+        readonly property real baseSize: root.alternateCardIconSize > 0 ? root.alternateCardIconSize : 64
         readonly property real scaleRatio: root.isCompact ? 0.55 : (root.height < 180 ? 0.70 : (root.height < 320 ? 0.85 : 1.0))
         width: Math.max(20, Math.round(baseSize * scaleRatio))
         height: width
+        scale: bottomIconHoverHandler.hovered ? 1.08 : 1.0
+
+        Behavior on scale {
+            NumberAnimation { duration: Kirigami.Units.shortDuration }
+        }
 
         HoverHandler {
             id: bottomIconHoverHandler
