@@ -314,47 +314,64 @@ Item {
         return Math.max(24, Math.round(pW + pageRoot.nonPreviewW));
     }
 
+    function isRowOutlier(rIndex, aspect) {
+        const startIdx = rIndex * pageRoot.cols;
+        const endIdx = Math.min(pageRoot.windowCount, (rIndex + 1) * pageRoot.cols);
+        const K = endIdx - startIdx;
+        if (K <= 1) return false;
+
+        const rowAvailW = Math.max(100, pageRoot.width - 32 - ((K - 1) * pageRoot.colSpacing));
+        const baseSlotW = (pageRoot.width - 32 - ((pageRoot.cols - 1) * pageRoot.colSpacing)) / pageRoot.cols;
+        const maxCardW = Math.min(rowAvailW * (1.5 / K), baseSlotW * 1.45);
+
+        const slotH = (pageRoot.windowCount === 1) ? Math.min(pageRoot.slotHeight, pageRoot.height * 0.80) : pageRoot.slotHeight;
+        const maxPH = Math.max(16, slotH - pageRoot.nonPreviewH);
+        const naturalW = maxPH * aspect + pageRoot.nonPreviewW;
+
+        return (aspect > 2.2) || (naturalW > maxCardW * 1.15);
+    }
+
     function getRowHeight(rIndex) {
         const _tick = pageRoot.layoutRefreshTick;
         const startIdx = rIndex * pageRoot.cols;
         const endIdx = Math.min(pageRoot.windowCount, (rIndex + 1) * pageRoot.cols);
-        if (startIdx >= endIdx) return pageRoot.slotHeight;
+        const K = endIdx - startIdx;
+        if (K <= 0) return pageRoot.slotHeight;
 
-        const maxPH = Math.max(16, pageRoot.slotHeight - pageRoot.nonPreviewH);
-        const maxPW = Math.max(16, pageRoot.slotWidth - pageRoot.nonPreviewW);
-        const slotAspect = maxPW / maxPH;
+        let rowAvailW = Math.max(100, pageRoot.width - 32 - ((K - 1) * pageRoot.colSpacing));
+        let maxSlotH = pageRoot.slotHeight;
+        if (pageRoot.windowCount === 1) {
+            rowAvailW = Math.max(100, pageRoot.width * 0.70);
+            maxSlotH = Math.max(100, pageRoot.height * 0.80);
+        }
 
-        const heights = [];
-        let maxH = 0;
+        const maxPH_from_height = Math.max(16, maxSlotH - pageRoot.nonPreviewH);
+        const baseSlotW = (pageRoot.width - 32 - ((pageRoot.cols - 1) * pageRoot.colSpacing)) / pageRoot.cols;
+        const maxCardW = (K > 1) ? Math.min(rowAvailW * (1.5 / K), baseSlotW * 1.45) : rowAvailW;
+
+        let normalAspectSum = 0;
+        let normalCount = 0;
+        let usedOutlierWidth = 0;
+
         for (let i = startIdx; i < endIdx; i++) {
-            const asp = pageRoot.getAspectAtIndex(i);
-            const a = (asp > 0) ? asp : 1.6;
-            let h = pageRoot.slotHeight;
-            if (a >= slotAspect) {
-                const pH = Math.round(maxPW / a);
-                h = Math.max(24, Math.round(pH + pageRoot.nonPreviewH));
-            }
-            heights.push(h);
-            if (h > maxH) {
-                maxH = h;
+            const a = pageRoot.getAspectAtIndex(i);
+            if (pageRoot.isRowOutlier(rIndex, a)) {
+                usedOutlierWidth += maxCardW;
+            } else {
+                normalAspectSum += a;
+                normalCount++;
             }
         }
 
-        if (maxH <= 0) return pageRoot.slotHeight;
-
-        // Try to keep window cards at maximum uniform height.
-        // Ignore extreme short-and-wide outlier windows (height < 72% of maxH in the row)
-        // so that a single short-and-wide window does not shrink the normal windows down tiny.
-        const threshold = maxH * 0.72;
-        let targetH = maxH;
-        for (let j = 0; j < heights.length; j++) {
-            if (heights[j] >= threshold) {
-                if (heights[j] < targetH) {
-                    targetH = heights[j];
-                }
-            }
+        if (normalCount === 0) {
+            return Math.max(24, Math.round(maxSlotH));
         }
-        return targetH;
+
+        const remainingWidth = Math.max(100, rowAvailW - usedOutlierWidth);
+        const maxPH_from_width = (remainingWidth - normalCount * pageRoot.nonPreviewW) / normalAspectSum;
+        const uniformPH = Math.max(16, Math.min(maxPH_from_height, maxPH_from_width));
+
+        return Math.max(24, Math.round(uniformPH + pageRoot.nonPreviewH));
     }
 
     readonly property real actualGridHeight: {
@@ -380,17 +397,20 @@ Item {
 
     function getCardHeight(rIndex, aspect) {
         const a = (aspect > 0) ? aspect : 1.6;
-        const rowH = (rIndex >= 0) ? pageRoot.getRowHeight(rIndex) : pageRoot.slotHeight;
-        const maxPH = Math.max(16, rowH - pageRoot.nonPreviewH);
-        const maxPW = Math.max(16, pageRoot.slotWidth - pageRoot.nonPreviewW);
-        const slotAspect = maxPW / maxPH;
+        const rowH = pageRoot.getRowHeight(rIndex);
 
-        if (a >= slotAspect) {
-            const pH = Math.round(maxPW / a);
-            return Math.max(24, Math.round(pH + pageRoot.nonPreviewH));
-        } else {
-            return Math.max(24, Math.round(maxPH + pageRoot.nonPreviewH));
+        if (pageRoot.isRowOutlier(rIndex, a)) {
+            const startIdx = rIndex * pageRoot.cols;
+            const endIdx = Math.min(pageRoot.windowCount, (rIndex + 1) * pageRoot.cols);
+            const K = Math.max(1, endIdx - startIdx);
+            const rowAvailW = Math.max(100, pageRoot.width - 32 - ((K - 1) * pageRoot.colSpacing));
+            const baseSlotW = (pageRoot.width - 32 - ((pageRoot.cols - 1) * pageRoot.colSpacing)) / pageRoot.cols;
+            const maxCardW = (K > 1) ? Math.min(rowAvailW * (1.5 / K), baseSlotW * 1.45) : rowAvailW;
+            const pH = (maxCardW - pageRoot.nonPreviewW) / a;
+            return Math.max(24, Math.min(rowH, Math.round(pH + pageRoot.nonPreviewH)));
         }
+
+        return rowH;
     }
 
     function getCardWidth(rIndex, aspect) {
@@ -398,7 +418,7 @@ Item {
         const cardH = pageRoot.getCardHeight(rIndex, a);
         const pH = Math.max(16, cardH - pageRoot.nonPreviewH);
         const pW = Math.round(pH * a);
-        return Math.max(24, Math.min(pageRoot.slotWidth, Math.round(pW + pageRoot.nonPreviewW)));
+        return Math.max(24, Math.round(pW + pageRoot.nonPreviewW));
     }
 
     function getCardWidthAtIndex(i) {

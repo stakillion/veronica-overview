@@ -119,64 +119,83 @@ Rectangle {
 
     readonly property bool isCompact: root.height < 110
 
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: root.isCompact ? 4 : 6
-        spacing: root.isCompact ? 2 : 4
+    // Header bar: App Icon & Window Title
+    Item {
+        id: headerRow
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.topMargin: root.isCompact ? 4 : 6
+        anchors.leftMargin: root.isCompact ? 4 : 6
+        anchors.rightMargin: root.isCompact ? 4 : 6
+        height: root.isCompact ? 18 : 24
 
-        // Header bar: App Icon & Window Title
-        RowLayout {
-            id: headerRow
-            Layout.fillWidth: true
-            Layout.preferredHeight: root.isCompact ? 18 : 24
-            Layout.maximumHeight: root.isCompact ? 18 : 24
-            Layout.leftMargin: {
-                if (root.alternateCardStyle) {
-                    const leftW = (leftActionCluster.visible && leftActionCluster.width > 0) ? (leftActionCluster.width + 8) : 2;
-                    const rightW = (topActionCluster.visible && topActionCluster.width > 0) ? (topActionCluster.width + 8) : 2;
-                    return Math.max(leftW, rightW);
-                }
-                return 2;
-            }
-            Layout.rightMargin: {
-                if (root.alternateCardStyle) {
-                    const leftW = (leftActionCluster.visible && leftActionCluster.width > 0) ? (leftActionCluster.width + 8) : 2;
-                    const rightW = (topActionCluster.visible && topActionCluster.width > 0) ? (topActionCluster.width + 8) : 2;
-                    return Math.max(leftW, rightW);
-                }
-                return (topActionCluster.visible && topActionCluster.width > 0) ? (topActionCluster.width + 8) : 2;
-            }
-            spacing: root.isCompact ? 4 : 6
-
-            Kirigami.Icon {
-                source: root.iconSource
-                implicitWidth: root.isCompact ? 14 : 18
-                implicitHeight: root.isCompact ? 14 : 18
-                Layout.alignment: Qt.AlignVCenter
-                visible: !root.alternateCardStyle
-            }
-
-            QQC2.Label {
-                text: root.cardTitle
-                font.bold: true
-                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                color: Kirigami.Theme.textColor
-                elide: Text.ElideRight
-                Layout.fillWidth: true
-                Layout.alignment: Qt.AlignVCenter
-                horizontalAlignment: root.alternateCardStyle ? Text.AlignHCenter : Text.AlignLeft
-            }
+        // Standard style left app icon
+        Kirigami.Icon {
+            id: headerAppIcon
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            source: root.iconSource
+            implicitWidth: root.isCompact ? 14 : 18
+            implicitHeight: root.isCompact ? 14 : 18
+            visible: !root.alternateCardStyle
         }
 
-        // Window Preview Canvas Area (Matches official TaskManager architecture)
-        Rectangle {
-            id: previewArea
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            radius: Math.max(4, root.itemRadius - 4)
-            color: Kirigami.Theme.alternateBackgroundColor
-            border.width: 1
-            border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.10)
+        // Window title
+        QQC2.Label {
+            id: titleLabel
+            anchors.left: {
+                if (root.alternateCardStyle) {
+                    const leftW = (leftActionCluster.visible && leftActionCluster.width > 0) ? (leftActionCluster.width + 4) : 0;
+                    const rightW = (topActionCluster.visible && topActionCluster.width > 0) ? (topActionCluster.width + 4) : 0;
+                    return parent.left;
+                }
+                return headerAppIcon.visible ? headerAppIcon.right : parent.left;
+            }
+            anchors.leftMargin: {
+                if (root.alternateCardStyle) {
+                    const leftW = (leftActionCluster.visible && leftActionCluster.width > 0) ? (leftActionCluster.width + 4) : 0;
+                    const rightW = (topActionCluster.visible && topActionCluster.width > 0) ? (topActionCluster.width + 4) : 0;
+                    return Math.max(leftW, rightW);
+                }
+                return 6;
+            }
+            anchors.right: parent.right
+            anchors.rightMargin: {
+                if (root.alternateCardStyle) {
+                    const leftW = (leftActionCluster.visible && leftActionCluster.width > 0) ? (leftActionCluster.width + 4) : 0;
+                    const rightW = (topActionCluster.visible && topActionCluster.width > 0) ? (topActionCluster.width + 4) : 0;
+                    return Math.max(leftW, rightW);
+                }
+                return (topActionCluster.visible && topActionCluster.width > 0) ? (topActionCluster.width + 4) : 0;
+            }
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.cardTitle
+            font.bold: true
+            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+            color: Kirigami.Theme.textColor
+            elide: Text.ElideRight
+            horizontalAlignment: root.alternateCardStyle ? Text.AlignHCenter : Text.AlignLeft
+            visible: width > 24
+        }
+    }
+
+    // Window Preview Canvas Area (Matches official TaskManager architecture)
+    Rectangle {
+        id: previewArea
+        anchors.top: headerRow.bottom
+        anchors.topMargin: root.isCompact ? 2 : 4
+        anchors.left: parent.left
+        anchors.leftMargin: root.isCompact ? 4 : 6
+        anchors.right: parent.right
+        anchors.rightMargin: root.isCompact ? 4 : 6
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: root.isCompact ? 4 : 6
+        radius: Math.max(4, root.itemRadius - 4)
+        color: Kirigami.Theme.alternateBackgroundColor
+        border.width: 1
+        border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.10)
+        clip: true
 
             // 1. High-resolution application icon (Underneath, visible while loading or if minimized)
             Item {
@@ -232,7 +251,6 @@ Rectangle {
                 }
             }
         }
-    }
 
     // Transparent click+hover+drag overlay for the entire card (above all content)
     MouseArea {
