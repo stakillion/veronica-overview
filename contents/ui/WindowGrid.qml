@@ -195,7 +195,7 @@ Item {
         let validAspCount = 0;
         for (let i = 0; i < pageRoot.windowCount; i++) {
             const a = pageRoot.getAspectAtIndex(i);
-            if (a > 0.5 && a < 3.5) {
+            if (a > 0.05 && a < 5.0) {
                 sumAsp += a;
                 validAspCount++;
             }
@@ -270,6 +270,35 @@ Item {
     readonly property real nonPreviewW: 12
     readonly property real nonPreviewH: 40
 
+    property var windowAspectMap: ({})
+    property int aspectVersion: 0
+
+    function cacheWindowAspect(key, asp) {
+        if (!key || typeof asp !== "number" || isNaN(asp) || asp <= 0.05 || asp > 20.0) return;
+        if (Math.abs((windowAspectMap[key] || 0) - asp) > 0.005) {
+            windowAspectMap[key] = asp;
+            aspectVersion++;
+        }
+    }
+
+    function getCachedAspect(key) {
+        const _v = aspectVersion;
+        if (key && windowAspectMap[key] > 0.05) {
+            return windowAspectMap[key];
+        }
+        return 0;
+    }
+
+    function getWindowKey(winIds, appId, title) {
+        if (winIds) {
+            if (Array.isArray(winIds) && winIds.length > 0 && winIds[0]) return String(winIds[0]);
+            if (typeof winIds === "string" && winIds.length > 0) return winIds;
+            if (typeof winIds === "number" && winIds > 0) return String(winIds);
+        }
+        if (appId || title) return (appId || "") + "::" + (title || "");
+        return "";
+    }
+
     function extractSize(geom) {
         if (!geom) return null;
         try {
@@ -294,15 +323,28 @@ Item {
     }
 
     function getAspectAtIndex(i) {
-        if (cardsRepeater && i >= 0 && i < cardsRepeater.count) {
-            const it = cardsRepeater.itemAt(i);
-            if (it && it.effectiveAspect > 0) return it.effectiveAspect;
-        }
         if (pageTasksModel && i >= 0 && i < pageTasksModel.count) {
             const idx = pageTasksModel.makeModelIndex(i);
+            const winIds = pageTasksModel.data(idx, TaskManager.AbstractTasksModel.WinIdList);
+            const appId = pageTasksModel.data(idx, TaskManager.AbstractTasksModel.AppId);
+            const title = pageTasksModel.data(idx, Qt.DisplayRole);
+            const key = pageRoot.getWindowKey(winIds, appId, title);
+            const cached = pageRoot.getCachedAspect(key);
+            if (cached > 0.05) {
+                return cached;
+            }
             const geom = pageTasksModel.data(idx, TaskManager.AbstractTasksModel.Geometry);
             const s = pageRoot.extractSize(geom);
-            if (s && s.height > 0) return s.width / s.height;
+            if (s && s.height > 0) {
+                const asp = s.width / s.height;
+                if (asp > 0.05 && asp < 20.0) {
+                    return asp;
+                }
+            }
+        }
+        if (cardsRepeater && i >= 0 && i < cardsRepeater.count) {
+            const it = cardsRepeater.itemAt(i);
+            if (it && it.effectiveAspect > 0.05) return it.effectiveAspect;
         }
         return (Screen.width > 0 && Screen.height > 0) ? (Screen.width / Screen.height) : 1.6;
     }
@@ -422,10 +464,6 @@ Item {
     }
 
     function getCardWidthAtIndex(i) {
-        if (cardsRepeater && i >= 0 && i < cardsRepeater.count) {
-            const it = cardsRepeater.itemAt(i);
-            if (it && it.cardW > 0) return it.cardW;
-        }
         const rIndex = Math.floor(i / pageRoot.cols);
         const asp = pageRoot.getAspectAtIndex(i);
         return pageRoot.getCardWidth(rIndex, asp);
@@ -487,6 +525,22 @@ Item {
                 required property var model
 
                 property real customAspect: 0
+
+                readonly property string winKey: pageRoot.getWindowKey(itemWinIds, itemAppId, itemTitle)
+
+                onWinKeyChanged: {
+                    customAspect = pageRoot.getCachedAspect(winKey);
+                }
+
+                onItemGeomChanged: {
+                    const s = pageRoot.extractSize(itemGeom);
+                    if (s && s.height > 0) {
+                        const asp = s.width / s.height;
+                        if (asp > 0.05 && asp < 20.0 && winKey) {
+                            pageRoot.cacheWindowAspect(winKey, asp);
+                        }
+                    }
+                }
 
                 readonly property string itemTitle: model.display ? String(model.display).trim() : ""
                 readonly property string itemAppId: model.AppId ? String(model.AppId).trim() : ""
@@ -636,9 +690,16 @@ Item {
                 readonly property int colIndex: cellItem.index % pageRoot.cols
 
                 readonly property real effectiveAspect: {
-                    if (customAspect > 0) return customAspect;
+                    const cached = pageRoot.getCachedAspect(winKey);
+                    if (cached > 0.05) return cached;
+
+                    if (customAspect > 0.05) return customAspect;
+
                     const s = pageRoot.extractSize(cellItem.itemGeom);
-                    if (s) return s.width / s.height;
+                    if (s && s.height > 0) {
+                        const asp = s.width / s.height;
+                        if (asp > 0.05 && asp < 20.0) return asp;
+                    }
                     return (Screen.width > 0 && Screen.height > 0) ? (Screen.width / Screen.height) : 1.6;
                 }
 
@@ -725,7 +786,12 @@ Item {
                     }
 
                     onAspectDiscovered: asp => {
-                        cellItem.customAspect = asp;
+                        if (asp > 0.05 && asp < 20.0) {
+                            cellItem.customAspect = asp;
+                            if (cellItem.winKey) {
+                                pageRoot.cacheWindowAspect(cellItem.winKey, asp);
+                            }
+                        }
                     }
 
                     onActivated: pageRoot.activateTask(cellItem.index)

@@ -234,7 +234,7 @@ Item {
                                 filterByActivity: true
                                 activity: stripActivityInfo.currentActivity
                                 filterHidden: false
-                                filterMinimized: false
+                                filterMinimized: true
                                 filterNotMinimized: false
                                 groupMode: TaskManager.TasksModel.GroupDisabled
                                 sortMode: TaskManager.TasksModel.SortDisabled
@@ -251,12 +251,12 @@ Item {
                                     readonly property string winTitle: model.display ? String(model.display).trim() : ""
                                     readonly property string winAppId: model.AppId ? String(model.AppId).trim() : ""
                                     readonly property bool isSelf: winTitle === "Veronica Overview" || winAppId === "stakillion.veronica.overview" || Boolean(model.SkipTaskbar) || Boolean(model.SkipPager)
+                                    readonly property bool isWinMinimized: Boolean(model.IsMinimized)
 
-                                    visible: !isSelf
+                                    visible: !isSelf && !isWinMinimized
 
                                     readonly property var geom: root.extractGeom(model.Geometry)
                                     readonly property bool isWinActive: Boolean(model.IsActive)
-                                    readonly property bool isWinMinimized: Boolean(model.IsMinimized)
                                     readonly property var winIcon: model.decoration ? model.decoration : "application-x-executable"
                                     readonly property int stackOrder: model.StackingOrder !== undefined ? Number(model.StackingOrder) : index
 
@@ -268,7 +268,7 @@ Item {
                                     height: geom ? Math.max(10, Math.min(parent.height, (geom.height / root.screenHeight) * parent.height)) : 16
 
                                     radius: 2
-                                    opacity: isWinMinimized ? 0.45 : 1.0
+                                    opacity: 1.0
 
                                     // Active window vs standard window fill matching Plasma Pager
                                     color: isWinActive

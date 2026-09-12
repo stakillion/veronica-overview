@@ -103,7 +103,8 @@ Rectangle {
         (mouseArea && mouseArea.containsMouse) ||
         (clusterHoverHandler && clusterHoverHandler.hovered) ||
         (leftClusterHoverHandler && leftClusterHoverHandler.hovered) ||
-        (bottomIconHoverHandler && bottomIconHoverHandler.hovered)
+        (bottomIconHoverHandler && bottomIconHoverHandler.hovered) ||
+        (bottomIconMouse && bottomIconMouse.containsMouse)
     )
 
     color: isActive
@@ -230,7 +231,7 @@ Rectangle {
                 id: winThumbnail
                 anchors.fill: parent
                 z: 2
-                winId: (!root.isMinimized && !root.isWaylandWindow && root.numericWinId > 0) ? root.numericWinId : 0
+                winId: (!root.isWaylandWindow && root.numericWinId > 0) ? root.numericWinId : 0
                 visible: !root.isWaylandWindow && root.numericWinId > 0 && thumbnailAvailable
             }
 
@@ -239,7 +240,7 @@ Rectangle {
                 id: pwSource
                 anchors.fill: parent
                 z: 3
-                visible: root.isWaylandWindow && !root.isMinimized
+                visible: root.isWaylandWindow
                 opacity: root.isBeingDragged ? 0.30 : 1.0
                 nodeId: waylandReq.nodeId
 
@@ -253,7 +254,7 @@ Rectangle {
 
                 TaskManager.ScreencastingRequest {
                     id: waylandReq
-                    uuid: (root.isWaylandWindow && root.overviewOpen && !root.isMinimized && root.winUuid.length > 0) ? root.winUuid : ""
+                    uuid: (root.isWaylandWindow && root.overviewOpen && root.winUuid.length > 0) ? root.winUuid : ""
                 }
             }
         }
@@ -857,11 +858,6 @@ Rectangle {
         readonly property real scaleRatio: root.isCompact ? 0.55 : (root.height < 180 ? 0.70 : (root.height < 320 ? 0.85 : 1.0))
         width: Math.max(20, Math.round(baseSize * scaleRatio))
         height: width
-        scale: bottomIconHoverHandler.hovered ? 1.08 : 1.0
-
-        Behavior on scale {
-            NumberAnimation { duration: Kirigami.Units.shortDuration }
-        }
 
         HoverHandler {
             id: bottomIconHoverHandler
@@ -873,18 +869,65 @@ Rectangle {
         }
 
         MouseArea {
+            id: bottomIconMouse
             anchors.fill: parent
             hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
+            cursorShape: (dragInitiated || mouseArea.dragInitiated) ? Qt.ClosedHandCursor : (containsMouse ? Qt.PointingHandCursor : Qt.ArrowCursor)
             acceptedButtons: Qt.LeftButton | Qt.RightButton
-            onClicked: mouse => {
-                mouse.accepted = true;
+
+            property real pressX: 0
+            property real pressY: 0
+            property bool dragInitiated: false
+
+            onPressed: mouse => {
                 if (mouse.button === Qt.RightButton) {
                     root.selected();
                     root.contextMenuRequested(mouse.x, mouse.y, bottomAppIconItem);
+                    return;
+                }
+                if (mouse.button === Qt.LeftButton) {
+                    pressX = mouse.x;
+                    pressY = mouse.y;
+                    dragInitiated = false;
+                }
+            }
+
+            onPositionChanged: mouse => {
+                if ((pressedButtons & Qt.LeftButton) && !dragInitiated) {
+                    const dx = mouse.x - pressX;
+                    const dy = mouse.y - pressY;
+                    if (Math.sqrt(dx * dx + dy * dy) > 8) {
+                        dragInitiated = true;
+                        const globalOrigin = root.mapToItem(null, 0, 0);
+                        const rootGrab = bottomAppIconItem.mapToItem(root, pressX, pressY);
+                        root.dragStarted(globalOrigin.x, globalOrigin.y, rootGrab.x, rootGrab.y);
+                    }
+                }
+                if (dragInitiated) {
+                    const globalPos = bottomAppIconItem.mapToItem(null, mouse.x, mouse.y);
+                    root.dragMoved(globalPos.x, globalPos.y);
+                }
+            }
+
+            onReleased: mouse => {
+                if (mouse.button === Qt.RightButton) return;
+                if (dragInitiated) {
+                    dragInitiated = false;
+                    const globalPos = bottomAppIconItem.mapToItem(null, mouse.x, mouse.y);
+                    root.dragEnded(globalPos.x, globalPos.y);
                 } else {
                     root.activated();
                 }
+                root.dragCanceled();
+            }
+
+            onCanceled: {
+                dragInitiated = false;
+                root.dragCanceled();
+            }
+
+            onWheel: wheel => {
+                wheel.accepted = false;
             }
         }
     }
