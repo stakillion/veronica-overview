@@ -711,8 +711,13 @@ Item {
                     }
                     onMediaPlayPauseClicked: {
                         if (cellItem.activePlayer) {
-                            if (cellItem.isMediaPlaying) cellItem.activePlayer.Pause();
-                            else cellItem.activePlayer.Play();
+                            if (typeof cellItem.activePlayer.PlayPause === "function") {
+                                cellItem.activePlayer.PlayPause();
+                            } else if (cellItem.isMediaPlaying) {
+                                cellItem.activePlayer.Pause();
+                            } else {
+                                cellItem.activePlayer.Play();
+                            }
                         }
                     }
                     onMediaNextClicked: {
@@ -760,6 +765,11 @@ Item {
             const idx = pageRoot.mprisSource.index(i, 0);
             const p = pageRoot.mprisSource.data(idx, 257);
             if (p && typeof p === "object" && p.canControl) {
+                const st = p.playbackStatus;
+                const isPl = st === Mpris.PlaybackStatus.Playing;
+                const isPa = st === Mpris.PlaybackStatus.Paused;
+                if (!isPl && !isPa) continue;
+
                 rawPlayers.push(p);
             }
         }

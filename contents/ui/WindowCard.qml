@@ -94,9 +94,15 @@ Rectangle {
     opacity: isBeingDragged ? 0.30 : 1.0
     Behavior on opacity { NumberAnimation { duration: 150 } }
 
+    HoverHandler {
+        id: cardHoverHandler
+    }
+
     readonly property bool isHovered: Boolean(
+        (cardHoverHandler && cardHoverHandler.hovered) ||
         (mouseArea && mouseArea.containsMouse) ||
         (clusterHoverHandler && clusterHoverHandler.hovered) ||
+        (leftClusterHoverHandler && leftClusterHoverHandler.hovered) ||
         (bottomIconHoverHandler && bottomIconHoverHandler.hovered)
     )
 
@@ -328,6 +334,10 @@ Rectangle {
         anchors.leftMargin: root.isCompact ? 4 : 6
         spacing: 6
         layoutDirection: Qt.LeftToRight
+
+        HoverHandler {
+            id: leftClusterHoverHandler
+        }
 
         // 1. Media playback controls: [[Previous track] [Play/pause] [Next track]]
         Row {
