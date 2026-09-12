@@ -28,6 +28,7 @@ Rectangle {
     property bool showAudioIndicator: Plasmoid.configuration.showAudioIndicator !== false
     property bool showMicIndicator: Plasmoid.configuration.showMicIndicator !== false
     property bool showCardMediaControls: Plasmoid.configuration.showCardMediaControls !== false
+    property bool smoothWindowPreviews: false
     property bool hasAudioStream: false
     property bool playingAudio: false
     property bool isAudioMuted: false
@@ -256,6 +257,23 @@ Rectangle {
                     id: waylandReq
                     uuid: (root.isWaylandWindow && root.overviewOpen && root.winUuid.length > 0) ? root.winUuid : ""
                 }
+            }
+
+            // High-quality native-resolution FBO buffer with hardware mipmapping & smooth filtering
+            ShaderEffectSource {
+                id: pwDownscaled
+                anchors.fill: parent
+                z: 3
+                visible: root.smoothWindowPreviews && root.isWaylandWindow && pwSource.ready
+                opacity: root.isBeingDragged ? 0.30 : 1.0
+                sourceItem: (root.smoothWindowPreviews && root.isWaylandWindow && pwSource.ready) ? pwSource : null
+                textureSize: (pwSource.streamSize && pwSource.streamSize.width > 20 && pwSource.streamSize.height > 20)
+                    ? Qt.size(pwSource.streamSize.width, pwSource.streamSize.height)
+                    : Qt.size(Math.max(1, previewArea.width), Math.max(1, previewArea.height))
+                live: root.smoothWindowPreviews && root.isWaylandWindow && root.overviewOpen
+                hideSource: root.smoothWindowPreviews && visible
+                mipmap: true
+                smooth: true
             }
         }
 

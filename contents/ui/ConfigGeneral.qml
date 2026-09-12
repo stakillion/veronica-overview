@@ -25,6 +25,7 @@ Kirigami.FormLayout {
     property alias cfg_showAudioIndicator: showAudioIndicatorCheckBox.checked
     property alias cfg_showMicIndicator: showMicIndicatorCheckBox.checked
     property alias cfg_showCardMediaControls: showCardMediaControlsCheckBox.checked
+    property alias cfg_smoothWindowPreviews: smoothWindowPreviewsCheckBox.checked
     property alias cfg_doubleSuperOpenLauncher: doubleSuperOpenLauncherCheckBox.checked
     property alias cfg_alternateCardStyle: alternateCardStyleCheckBox.checked
     property alias cfg_alternateCardIconSize: iconSizeSlider.value
@@ -208,6 +209,14 @@ Kirigami.FormLayout {
     QQC2.CheckBox {
         id: showCardMediaControlsCheckBox
         text: i18n("Display media playback controls on window cards")
+    }
+
+    QQC2.CheckBox {
+        id: smoothWindowPreviewsCheckBox
+        text: i18n("Smooth downsampling for window previews (hardware mipmapping)")
+        QQC2.ToolTip.text: i18n("Captures window previews at native resolution with hardware mipmapping to eliminate jagged text and missing line strokes.")
+        QQC2.ToolTip.visible: hovered
+        QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
     }
 
     QQC2.CheckBox {

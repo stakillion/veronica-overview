@@ -24,6 +24,7 @@ Item {
     property bool showCloseButtons: true
     property bool alternateCardStyle: false
     property int alternateCardIconSize: 64
+    property bool smoothWindowPreviews: false
     property int cardRadius: 14
     property bool overviewOpen: false
     property int draggedTaskIndex: -1
@@ -751,6 +752,7 @@ Item {
                     showCloseButton: pageRoot.showCloseButtons
                     alternateCardStyle: pageRoot.alternateCardStyle
                     alternateCardIconSize: pageRoot.alternateCardIconSize
+                    smoothWindowPreviews: pageRoot.smoothWindowPreviews
                     hasAudioStream: cellItem.shouldDisplayAudioIndicator
                     playingAudio: cellItem.playingAudio
                     isAudioMuted: cellItem.isAudioMuted
