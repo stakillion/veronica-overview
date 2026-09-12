@@ -68,6 +68,86 @@ Item {
         return s;
     }
 
+    function matchStreamToApp(stream, appId, pid, appName) {
+        if (!stream) return false;
+
+        const sPid = stream.pid || 0;
+        const sPortal = normalizeAppId(stream.portalAppId);
+        const sBin = normalizeAppId(stream.binary);
+        const sApp = (stream.appName || "").trim().toLowerCase();
+
+        const normId = normalizeAppId(appId);
+        const normName = appName ? String(appName).trim().toLowerCase() : "";
+
+        // 1. Direct PID match (native host process)
+        if (pid && pid > 0 && sPid > 0 && !sPortal && sPid === pid) {
+            return true;
+        }
+
+        // 2. Flatpak / Portal App ID match
+        if (sPortal && normId) {
+            if (sPortal === normId
+                || normId.endsWith("." + sPortal)
+                || sPortal.endsWith("." + normId)) {
+                return true;
+            }
+        }
+
+        // 3. Binary vs Desktop App ID match (e.g. binary "discord", appId "discord" or "com.discordapp.Discord")
+        if (sBin && normId && sBin.length >= 3) {
+            if (sBin === normId
+                || normId.endsWith("." + sBin)
+                || normId.startsWith(sBin + ".")
+                || normId.startsWith(sBin + "-")
+                || normId.endsWith("-" + sBin)) {
+                return true;
+            }
+        }
+
+        // 4. Steam games (e.g. steam_app_12345 matching steam or steam portal)
+        if (normId.startsWith("steam_app_")) {
+            if (sBin === "steam" || (sPortal && sPortal.indexOf("steam") !== -1)) {
+                return true;
+            }
+        }
+
+        // 5. Application name match
+        if (sApp && normName && sApp.length >= 3 && normName.length >= 3) {
+            if (sApp === normName || sApp === "[" + normName + "]") {
+                return true;
+            }
+            if (sBin && (sBin === normName || normName === sBin)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function getStreamsForCard(appId, pid, appName) {
+        if (!appId && (!pid || pid <= 0) && !appName) return [];
+        const streams = [];
+        for (let i = 0, count = instantiator.count; i < count; ++i) {
+            const stream = instantiator.objectAt(i);
+            if (stream && matchStreamToApp(stream, appId, pid, appName)) {
+                streams.push(stream);
+            }
+        }
+        return streams;
+    }
+
+    function getMicStreamsForCard(appId, pid, appName) {
+        if (!appId && (!pid || pid <= 0) && !appName) return [];
+        const streams = [];
+        for (let i = 0, count = sourceInstantiator.count; i < count; ++i) {
+            const stream = sourceInstantiator.objectAt(i);
+            if (stream && stream.isMicrophoneStream && matchStreamToApp(stream, appId, pid, appName)) {
+                streams.push(stream);
+            }
+        }
+        return streams;
+    }
+
     function streamsForAppId(appId) {
         const norm = normalizeAppId(appId);
         if (!norm) return [];

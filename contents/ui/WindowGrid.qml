@@ -531,6 +531,10 @@ Item {
 
                 onWinKeyChanged: {
                     customAspect = pageRoot.getCachedAspect(winKey);
+                    if (setAssignedPlayer) {
+                        setAssignedPlayer(null, -1);
+                    }
+                    pageRoot.updateAllMediaControls();
                 }
 
                 onItemGeomChanged: {
@@ -553,7 +557,11 @@ Item {
                 readonly property int itemAppPid: model.AppPid !== undefined ? model.AppPid : 0
                 readonly property int paVersion: pageRoot.pulseAudio ? pageRoot.pulseAudio.streamsVersion : 0
 
-                property var audioStreams: []
+                readonly property var audioStreams: {
+                    const _v = paVersion;
+                    if (isSelf || !pageRoot.pulseAudio) return [];
+                    return pageRoot.pulseAudio.getStreamsForCard(itemAppId, itemAppPid, itemAppName);
+                }
                 readonly property bool hasAudioStream: {
                     const _v = paVersion;
                     return audioStreams && audioStreams.length > 0;
@@ -568,9 +576,7 @@ Item {
                 }
                 readonly property bool shouldDisplayAudioIndicator: hasAudioStream && (playingAudio || isAudioMuted)
 
-                function setAssignedAudioStreams(s) {
-                    cellItem.audioStreams = s || [];
-                }
+                function setAssignedAudioStreams(s) {}
 
                 function toggleMuted() {
                     if (!cellItem.audioStreams || cellItem.audioStreams.length === 0) return;
@@ -583,7 +589,11 @@ Item {
                     if (pageRoot.pulseAudio) pageRoot.pulseAudio.notifyChanged();
                 }
 
-                property var micStreams: []
+                readonly property var micStreams: {
+                    const _v = paVersion;
+                    if (isSelf || !pageRoot.pulseAudio) return [];
+                    return pageRoot.pulseAudio.getMicStreamsForCard(itemAppId, itemAppPid, itemAppName);
+                }
                 readonly property bool hasMicStream: {
                     const _v = paVersion;
                     return micStreams && micStreams.length > 0;
@@ -598,9 +608,7 @@ Item {
                 }
                 readonly property bool shouldDisplayMicIndicator: hasMicStream && (recordingMic || isMicMuted)
 
-                function setAssignedMicStreams(s) {
-                    cellItem.micStreams = s || [];
-                }
+                function setAssignedMicStreams(s) {}
 
                 function toggleMicMuted() {
                     if (!cellItem.micStreams || cellItem.micStreams.length === 0) return;
@@ -1006,71 +1014,8 @@ Item {
     }
 
     function updateAllAudioStreams() {
-        if (!pageRoot.pulseAudio) {
-            for (let i = 0; i < cardsRepeater.count; ++i) {
-                const it = cardsRepeater.itemAt(i);
-                if (it) {
-                    if (it.setAssignedAudioStreams) it.setAssignedAudioStreams([]);
-                    if (it && it.setAssignedMicStreams) it.setAssignedMicStreams([]);
-                }
-            }
-            return;
-        }
-
-        const pa = pageRoot.pulseAudio;
-
-        const appGroups = {};
-        for (let i = 0; i < cardsRepeater.count; ++i) {
-            const cell = cardsRepeater.itemAt(i);
-            if (!cell) continue;
-            if (cell.isSelf) {
-                if (cell.setAssignedAudioStreams) cell.setAssignedAudioStreams([]);
-                if (cell.setAssignedMicStreams) cell.setAssignedMicStreams([]);
-                continue;
-            }
-            const key = (cell.itemAppId || cell.itemAppName || "app").toLowerCase();
-            if (!appGroups[key]) appGroups[key] = [];
-            appGroups[key].push(cell);
-        }
-
-        for (let key in appGroups) {
-            const cells = appGroups[key];
-            const firstCell = cells[0];
-
-            let allStreams = [];
-            if (firstCell.itemAppId) {
-                allStreams = pa.streamsForAppId(firstCell.itemAppId);
-            }
-            if (!allStreams.length && firstCell.itemAppPid > 0) {
-                allStreams = pa.streamsForPid(firstCell.itemAppPid);
-            }
-            if (!allStreams.length && firstCell.itemAppName) {
-                allStreams = pa.streamsForAppName(firstCell.itemAppName);
-            }
-
-            for (let c of cells) {
-                if (c && c.setAssignedAudioStreams) {
-                    c.setAssignedAudioStreams(allStreams);
-                }
-            }
-
-            let allMicStreams = [];
-            if (firstCell.itemAppId) {
-                allMicStreams = pa.micStreamsForAppId(firstCell.itemAppId);
-            }
-            if (!allMicStreams.length && firstCell.itemAppPid > 0) {
-                allMicStreams = pa.micStreamsForPid(firstCell.itemAppPid);
-            }
-            if (!allMicStreams.length && firstCell.itemAppName) {
-                allMicStreams = pa.micStreamsForAppName(firstCell.itemAppName);
-            }
-
-            for (let c of cells) {
-                if (c && c.setAssignedMicStreams) {
-                    c.setAssignedMicStreams(allMicStreams);
-                }
-            }
-        }
+        // audioStreams and micStreams are reactive QML property bindings directly on cellItem
+        // dependent on paVersion, itemAppId, itemAppPid, and itemAppName.
     }
 
     Connections {
