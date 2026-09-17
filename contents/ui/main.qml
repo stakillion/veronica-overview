@@ -44,7 +44,6 @@ PlasmoidItem {
 
     property int targetLauncherId: -1
     property real lastOverviewOpenTime: 0
-    property bool isLauncherOpenOnOverview: false
     readonly property int doubleSuperThreshold: 380
 
     TaskManager.VirtualDesktopInfo {
@@ -106,6 +105,12 @@ PlasmoidItem {
                 }
                 // If the task is minimized, ignore it
                 if (globalFocusMonitor.data(activeTask, TaskManager.AbstractTasksModel.IsMinimized) === true) {
+                    return;
+                }
+
+                // If the focused task is the window that was already active when the overview opened, ignore it
+                const winIds = globalFocusMonitor.data(activeTask, TaskManager.AbstractTasksModel.WinIdList);
+                if (root.lastActiveWinId && winIds && winIds.length > 0 && String(winIds[0]) === String(root.lastActiveWinId)) {
                     return;
                 }
 
@@ -227,6 +232,7 @@ PlasmoidItem {
 
     function discoverAndPrimeLauncher() {
         if (Plasmoid.configuration.doubleSuperOpenLauncher !== true) return;
+        if (root.targetLauncherId > 0) return;
 
         const script =
             "var pans = panels(); " +
@@ -275,6 +281,41 @@ PlasmoidItem {
         }, function(_) {});
     }
 
+    function findTargetLauncherApplet() {
+        var grid = root.parent ? root.parent.parent : null;
+        if (!grid || !grid.children) return null;
+        for (var c = 0; c < grid.children.length; c++) {
+            var ch = grid.children[c];
+            if (!ch) continue;
+            var a = ch.applet;
+            if (a && a.plasmoid) {
+                if (root.targetLauncherId > 0 && a.plasmoid.id === root.targetLauncherId) {
+                    return a;
+                }
+                var pId = (a.plasmoid.pluginMetaData) ? a.plasmoid.pluginMetaData.pluginId : "";
+                if (pId.indexOf("launcher") !== -1 || pId.indexOf("kickoff") !== -1 || pId.indexOf("kicker") !== -1) {
+                    return a;
+                }
+            }
+        }
+        return null;
+    }
+
+    function isLauncherOpen() {
+        var a = findTargetLauncherApplet();
+        if (a) {
+            return Boolean(a.expanded);
+        }
+        return false;
+    }
+
+    function closeLauncher() {
+        var a = findTargetLauncherApplet();
+        if (a && a.expanded) {
+            a.expanded = false;
+        }
+    }
+
     function toggleApplicationLauncher() {
         if (root.targetLauncherId <= 0) return;
         DBus.SessionBus.asyncCall({
@@ -316,6 +357,10 @@ PlasmoidItem {
 
         overviewDialog.title = "Veronica Overview:open:" + root.fadeDuration;
         overviewDialog.visible = true;
+        overviewDialog.requestActivate();
+        if (overviewOverlay) {
+            overviewOverlay.forceActiveFocus();
+        }
 
         // Save original hiding mode ONLY if not already in temporary state, set dodge-windows panels to 'windowsgobelow', and compute dynamic panel margins across all edges
         const script = "var pans = panels(); var top = 0, bottom = 0, left = 0, right = 0; " +
@@ -393,10 +438,8 @@ PlasmoidItem {
     }
 
     function finalizeClose() {
-        if (root.isLauncherOpenOnOverview) {
-            root.toggleApplicationLauncher();
-            root.isLauncherOpenOnOverview = false;
-        }
+        root.closeLauncher();
+        root.lastOverviewOpenTime = 0;
 
         isOverviewOpen = false;
         overviewDialog.visible = false;
@@ -422,28 +465,30 @@ PlasmoidItem {
         const now = Date.now();
         const doubleSuperEnabled = Plasmoid.configuration.doubleSuperOpenLauncher === true;
 
+        // 1. Overview is currently closed -> Open Overview
         if (!root.isOverviewOpen) {
             root.lastOverviewOpenTime = now;
-            root.isLauncherOpenOnOverview = false;
             root.openOverview();
             return;
         }
 
-        // If launcher is open on top of overview: close launcher, keep overview open
-        if (root.isLauncherOpenOnOverview) {
-            root.isLauncherOpenOnOverview = false;
-            root.toggleApplicationLauncher();
+        // 2. Launcher is open on top of overview (via keyboard double-press OR mouse click)
+        // -> Close ONLY the launcher, keep the overview open!
+        if (root.isLauncherOpen()) {
+            root.lastOverviewOpenTime = 0;
+            root.closeLauncher();
             root.grabOverviewFocus();
             return;
         }
 
-        // If overview is open and Meta is pressed quickly (< 380ms): open launcher
+        // 3. Overview is open alone, and Super was pressed quickly (< 380ms) -> Open Launcher
         if (doubleSuperEnabled && root.targetLauncherId > 0 && (now - root.lastOverviewOpenTime < root.doubleSuperThreshold)) {
-            root.isLauncherOpenOnOverview = true;
+            root.lastOverviewOpenTime = 0;
             root.toggleApplicationLauncher();
             return;
         }
 
+        // 4. Overview is open alone -> Close Overview
         root.closeOverview();
     }
 
@@ -488,12 +533,6 @@ PlasmoidItem {
         visible: false
 
         property bool _needsFocusGrab: false
-
-        onActiveChanged: {
-            if (active && root.isLauncherOpenOnOverview) {
-                root.isLauncherOpenOnOverview = false;
-            }
-        }
 
         onVisibleChanged: {
             if (visible) {
