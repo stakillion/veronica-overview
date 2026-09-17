@@ -3,7 +3,6 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.extras as PlasmaExtras
 import org.kde.taskmanager as TaskManager
 import org.kde.plasma.private.mpris as Mpris
-import plasma.applet.org.kde.plasma.taskmanager as TaskManagerApplet
 
 Item {
     id: wrapper
@@ -107,7 +106,7 @@ Item {
         id: activityInfo
     }
 
-    TaskManagerApplet.Backend {
+    Backend {
         id: backend
     }
 

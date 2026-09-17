@@ -1,6 +1,5 @@
 import QtQuick
 import org.kde.plasma.private.volume as PlasmaPa
-import plasma.applet.org.kde.plasma.taskmanager as TaskManagerApplet
 
 Item {
     id: pulseAudio
@@ -19,7 +18,7 @@ Item {
 
     property var pidMatches: new Set()
 
-    TaskManagerApplet.Backend {
+    Backend {
         id: backend
     }
 
