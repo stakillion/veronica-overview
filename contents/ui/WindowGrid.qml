@@ -179,6 +179,11 @@ Item {
     readonly property real spacing: Math.max(12, Math.min(20, Math.round(pageRoot.width / 100)))
     readonly property real colSpacing: pageRoot.spacing
 
+    // Precise bottom padding matching the exact distance the alternate card icon peeks below the card border (height * 0.22)
+    readonly property real bottomPadding: (pageRoot.alternateCardStyle)
+        ? Math.round((pageRoot.alternateCardIconSize > 0 ? pageRoot.alternateCardIconSize : 64) * 0.22)
+        : 0
+
     // Dynamic aspect-ratio-aware grid solver:
     // - Based completely on actual available viewport space (width & height)
     // - Maximizes card size while filling both horizontal and vertical space
@@ -189,7 +194,7 @@ Item {
         if (windowCount === 3) return 2; // Always 2 rows, 1.5 columns (2 on top, 1 on bottom)
 
         const W = Math.max(200, pageRoot.width - 32);
-        const H = Math.max(200, pageRoot.height - 32);
+        const H = Math.max(200, pageRoot.height - 32 - pageRoot.bottomPadding);
 
         // Determine average aspect ratio of windows on this workspace
         let sumAsp = 0;
@@ -250,7 +255,7 @@ Item {
     readonly property int rowCount: Math.max(1, Math.ceil(windowCount / cols))
 
     readonly property real availW: Math.max(100, pageRoot.width - (pageRoot.colSpacing * (cols - 1)) - 32)
-    readonly property real availH: Math.max(100, pageRoot.height - (pageRoot.spacing * (rowCount - 1)) - 32)
+    readonly property real availH: Math.max(100, pageRoot.height - (pageRoot.spacing * (rowCount - 1)) - 32 - pageRoot.bottomPadding)
 
     // Slot bounds fill the entire available grid space across all columns and rows
     readonly property real slotWidth: {
@@ -261,7 +266,7 @@ Item {
 
     readonly property real slotHeight: {
         const base = availH / rowCount;
-        if (windowCount === 1) return Math.min(base, pageRoot.height * 0.80);
+        if (windowCount === 1) return Math.min(base, (pageRoot.height - pageRoot.bottomPadding) * 0.80);
         return base;
     }
 
@@ -385,7 +390,7 @@ Item {
         let maxSlotH = pageRoot.slotHeight;
         if (pageRoot.windowCount === 1) {
             rowAvailW = Math.max(100, pageRoot.width * 0.70);
-            maxSlotH = Math.max(100, pageRoot.height * 0.80);
+            maxSlotH = Math.max(100, (pageRoot.height - pageRoot.bottomPadding) * 0.80);
         }
 
         const maxPH_from_height = Math.max(16, maxSlotH - pageRoot.nonPreviewH);
@@ -428,7 +433,7 @@ Item {
         return totalH;
     }
 
-    readonly property real gridStartY: Math.max(16, (pageRoot.height - actualGridHeight) / 2)
+    readonly property real gridStartY: Math.max(16, (pageRoot.height - pageRoot.bottomPadding - actualGridHeight) / 2)
 
     function getRowY(rIndex) {
         let y = pageRoot.gridStartY;
