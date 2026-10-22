@@ -80,7 +80,6 @@ Item {
         id: pageTasksModel
         filterByVirtualDesktop: true
         virtualDesktop: pageRoot.desktopId
-        filterByCurrentVirtualDesktop: false
         filterByActivity: true
         activity: pageActivityInfo.currentActivity
         filterByScreen: false

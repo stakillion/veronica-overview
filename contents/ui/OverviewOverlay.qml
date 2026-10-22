@@ -479,11 +479,22 @@ FocusScope {
         border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
         clip: true
 
+        function closeSearchAndDismiss() {
+            Qt.callLater(() => {
+                if (searchBar) {
+                    searchBar.text = "";
+                    searchBar.searchField.focus = false;
+                }
+                root.requestCloseImmediately(null);
+            });
+        }
+
         function activateCurrent() {
             if (resultsView.currentIndex < 0 && resultsView.count > 0) {
                 resultsView.currentIndex = 0;
             }
             resultsView.runCurrentIndex();
+            closeSearchAndDismiss();
         }
 
         function selectNext() {
@@ -525,11 +536,17 @@ FocusScope {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 queryString: searchBar.text
+
                 onActivated: {
-                    Qt.callLater(() => {
-                        if (searchBar) searchBar.text = "";
-                        root.requestCloseImmediately();
-                    });
+                    searchResults.closeSearchAndDismiss();
+                }
+
+                TapHandler {
+                    acceptedButtons: Qt.LeftButton
+                    gesturePolicy: TapHandler.DragThreshold
+                    onTapped: {
+                        searchResults.closeSearchAndDismiss();
+                    }
                 }
             }
         }
