@@ -775,14 +775,6 @@ FocusScope {
                             uuid: (dragOverlay.isWayland && dragOverlay.isDragging && dragOverlay.dragWinUuid.length > 0) ? dragOverlay.dragWinUuid : ""
                         }
                     }
-
-                    // X11 Thumbnail fallback
-                    PlasmaCore.WindowThumbnail {
-                        anchors.fill: parent
-                        z: 2
-                        winId: (!dragOverlay.isWayland && dragOverlay.dragNumericWinId > 0) ? dragOverlay.dragNumericWinId : 0
-                        visible: !dragOverlay.isWayland && dragOverlay.dragNumericWinId > 0 && thumbnailAvailable
-                    }
                 }
             }
         }

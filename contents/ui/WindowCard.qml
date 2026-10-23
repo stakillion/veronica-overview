@@ -227,16 +227,7 @@ Rectangle {
                 }
             }
 
-            // 2. X11 Window Thumbnail (Fallback for X11 / Xwayland windows)
-            PlasmaCore.WindowThumbnail {
-                id: winThumbnail
-                anchors.fill: parent
-                z: 2
-                winId: (!root.isWaylandWindow && root.numericWinId > 0) ? root.numericWinId : 0
-                visible: !root.isWaylandWindow && root.numericWinId > 0 && thumbnailAvailable
-            }
-
-            // 3. Live Wayland Window Texture (Direct TaskManager Screencast)
+            // 2. Live Window Texture (Direct TaskManager Screencast via PipeWire)
             PipeWire.PipeWireSourceItem {
                 id: pwSource
                 anchors.fill: parent
